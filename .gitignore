@@ -10,6 +10,7 @@ Thumbs.db
 
 # Node / JS
 node_modules/
+*/node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -17,19 +18,17 @@ yarn-error.log*
 .next/
 out/
 dist/
+*/dist/
 build/
 
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-venv/
-.venv/
-env/
+# Database files
+*.db
+*.sqlite
+data/
+backend/data/
 
 # Environment files
 .env
+*/.env
 .env.local
 .env.*.local
