@@ -2,6 +2,9 @@ import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
 import { getDatabase } from './db/connection.js';
 import { seedDatabase } from './db/seed.js';
+import { agentsRouter } from './routes/agents.js';
+import { policiesRouter } from './routes/policies.js';
+import { actionsRouter } from './routes/actions.js';
 
 export function createApp(): Express {
   const app = express();
@@ -9,12 +12,18 @@ export function createApp(): Express {
   app.use(cors());
   app.use(express.json());
 
+  // Mount API routers
+  app.use('/api/agents', agentsRouter);
+  app.use('/api/policies', policiesRouter);
+  app.use('/api/actions', actionsRouter);
+
   // Health check endpoint (Phase 1 deliverable)
   app.get('/api/health', (req: Request, res: Response) => {
     try {
       const db = getDatabase();
       const userCountRow = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
       const agentCountRow = db.prepare('SELECT COUNT(*) as count FROM agents').get() as { count: number };
+      const policyCountRow = db.prepare('SELECT COUNT(*) as count FROM policies').get() as { count: number };
 
       res.status(200).json({
         status: 'ok',
@@ -23,7 +32,8 @@ export function createApp(): Express {
         database: {
           connected: true,
           users: userCountRow.count,
-          agents: agentCountRow.count
+          agents: agentCountRow.count,
+          policies: policyCountRow.count
         }
       });
     } catch (error: any) {
