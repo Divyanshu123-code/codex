@@ -279,7 +279,7 @@ export function testCorrection(
   const behaviouralPass = behaviouralChecks.every((c) => c.passed);
   const verdict = structuralPass && behaviouralPass ? 'PASS' : 'FAIL';
 
-  const correctionId = `corr-${Date.now()}`;
+  const correctionId = `corr-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
   const now = Date.now();
 
   targetDb.prepare(`

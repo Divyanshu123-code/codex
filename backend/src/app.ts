@@ -9,6 +9,8 @@ import { approvalsRouter } from './routes/approvals.js';
 import { incidentsRouter } from './routes/incidents.js';
 import { auditRouter } from './routes/audit.js';
 import { correctionsRouter } from './routes/corrections.js';
+import { tasksRouter } from './routes/tasks.js';
+import { dashboardRouter } from './routes/dashboard.js';
 
 export function createApp(): Express {
   const app = express();
@@ -24,6 +26,13 @@ export function createApp(): Express {
   app.use('/api/incidents', incidentsRouter);
   app.use('/api/audit', auditRouter);
   app.use('/api/corrections', correctionsRouter);
+  app.use('/api/tasks', tasksRouter);
+  app.use('/api/task-types', (req: Request, res: Response, next) => {
+    // Map /api/task-types to tasksRouter's /types
+    req.url = '/types';
+    tasksRouter(req, res, next);
+  });
+  app.use('/api/dashboard', dashboardRouter);
 
   // Health check endpoint (Phase 1 deliverable)
   app.get('/api/health', (req: Request, res: Response) => {

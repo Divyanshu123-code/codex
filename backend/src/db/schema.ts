@@ -20,14 +20,39 @@ export function initializeSchema(db: DatabaseSync): void {
       simulated_cost REAL NOT NULL DEFAULT 0.0
     );
 
-    -- Task types (Section 3.6 metadata)
+    -- Task types (Workstream A & Section 3.6 metadata)
     CREATE TABLE IF NOT EXISTS task_types (
       task_type TEXT PRIMARY KEY,
+      id TEXT,
+      name TEXT NOT NULL,
       description TEXT NOT NULL,
-      default_handler TEXT NOT NULL CHECK(default_handler IN ('agent', 'human')),
+      default_handler TEXT NOT NULL CHECK(default_handler IN ('agent', 'human', 'approval_required')),
+      risk_category TEXT NOT NULL CHECK(risk_category IN ('low', 'medium', 'high', 'critical')),
+      required_capabilities TEXT NOT NULL, -- JSON array
+      approval_required INTEGER NOT NULL DEFAULT 0,
       escalation_role TEXT NOT NULL,
       human_minutes_estimate REAL NOT NULL DEFAULT 0.0,
       human_cost_estimate REAL NOT NULL DEFAULT 0.0
+    );
+
+    -- Tasks queue & allocation (Workstream A)
+    CREATE TABLE IF NOT EXISTS tasks (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      task_type TEXT NOT NULL,
+      description TEXT NOT NULL,
+      payload TEXT NOT NULL,                -- JSON
+      handler TEXT NOT NULL CHECK(handler IN ('agent', 'human', 'escalated', 'blocked')),
+      handler_reason TEXT NOT NULL,
+      assigned_agent_id TEXT,
+      risk_category TEXT NOT NULL CHECK(risk_category IN ('low', 'medium', 'high', 'critical')),
+      status TEXT NOT NULL CHECK(status IN ('QUEUED', 'IN_PROGRESS', 'COMPLETED', 'ESCALATED', 'BLOCKED')),
+      escalation_target_role TEXT,
+      escalated_at INTEGER,
+      escalation_reason TEXT,
+      correlation_id TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      completed_at INTEGER
     );
 
     -- Agents table (FR-1 & Section 3.4 status model)
@@ -193,5 +218,6 @@ export function initializeSchema(db: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS idx_action_agent ON action_requests(agent_id);
     CREATE INDEX IF NOT EXISTS idx_incidents_agent ON incidents(agent_id);
     CREATE INDEX IF NOT EXISTS idx_approvals_status ON approvals(status);
+    CREATE INDEX IF NOT EXISTS idx_tasks_handler ON tasks(handler);
   `);
 }

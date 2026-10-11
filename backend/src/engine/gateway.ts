@@ -21,6 +21,7 @@ export interface RouteActionResult {
   approvalStatus?: 'PENDING' | 'APPROVED' | 'REJECTED';
   executionStatus: 'NOT_STARTED' | 'EXECUTING' | 'SUCCEEDED' | 'FAILED' | 'NOT_EXECUTED';
   nonExecutionReason?: string;
+  incidentId?: string;
   result?: any;
 }
 
@@ -414,7 +415,7 @@ export function routeAction(
 
   let incidentId: string | null = null;
   if (evaluation.openIncident && agent) {
-    incidentId = `inc-${Date.now()}`;
+    incidentId = `inc-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     targetDb.prepare(`
       INSERT INTO incidents (
         id, agent_id, triggering_request_id, severity, policy_id, policy_version,
@@ -463,6 +464,7 @@ export function routeAction(
     gateReasonCode: evaluation.reasonCode,
     explanation: evaluation.explanation,
     executionStatus: 'NOT_EXECUTED',
-    nonExecutionReason: 'BLOCKED_BY_POLICY'
+    nonExecutionReason: 'BLOCKED_BY_POLICY',
+    incidentId: incidentId || undefined
   };
 }

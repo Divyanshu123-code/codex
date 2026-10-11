@@ -18,6 +18,7 @@ export function seedDatabase(db?: DatabaseSync): void {
     DELETE FROM action_requests;
     DELETE FROM policies;
     DELETE FROM agents;
+    DELETE FROM tasks;
     DELETE FROM task_types;
     DELETE FROM operations_catalog;
     DELETE FROM users;
@@ -34,8 +35,9 @@ export function seedDatabase(db?: DatabaseSync): void {
   insertUser.run('usr-admin', 'admin', passwordHash, 'admin', now);
   insertUser.run('usr-reviewer', 'reviewer', passwordHash, 'reviewer', now);
   insertUser.run('usr-auditor', 'auditor', passwordHash, 'auditor', now);
+  insertUser.run('usr-researcher', 'researcher', passwordHash, 'auditor', now);
 
-  // 2. Seed Operations Catalog (Section 3.6 metadata)
+  // 2. Seed Operations Catalog
   const insertOp = targetDb.prepare(`
     INSERT INTO operations_catalog (operation, description, mutating, sensitive, simulated_cost)
     VALUES (?, ?, ?, ?, ?)
@@ -46,16 +48,104 @@ export function seedDatabase(db?: DatabaseSync): void {
   insertOp.run('export_dataset', 'Export processed synthetic documents to external share', 0, 1, 0.20);
   insertOp.run('delete_file', 'Permanently purge a synthetic document', 1, 1, 0.10);
 
-  // 3. Seed Task Types (Section 3.6 metadata)
-  const insertTask = targetDb.prepare(`
-    INSERT INTO task_types (task_type, description, default_handler, escalation_role, human_minutes_estimate, human_cost_estimate)
-    VALUES (?, ?, ?, ?, ?, ?)
+  // 3. Seed Task Types
+  const insertTaskType = targetDb.prepare(`
+    INSERT INTO task_types (task_type, id, name, description, default_handler, risk_category, required_capabilities, approval_required, escalation_role, human_minutes_estimate, human_cost_estimate)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
-  insertTask.run('document_analysis', 'Automated scanning and key-point extraction', 'agent', 'reviewer', 15.0, 25.0);
-  insertTask.run('export_request', 'Bulk transmission of sensitive datasets', 'human', 'admin', 30.0, 50.0);
-  insertTask.run('cleanup_routine', 'Post-processing artifact cleanup and hygiene', 'agent', 'reviewer', 10.0, 15.0);
+  insertTaskType.run(
+    'document_analysis',
+    'document_analysis',
+    'Automated Document Ingestion & Summary',
+    'Automated scanning and key-point extraction of synthetic intelligence briefs',
+    'agent',
+    'low',
+    JSON.stringify(['read_file', 'write_summary']),
+    0,
+    'reviewer',
+    15.0,
+    25.0
+  );
+  insertTaskType.run(
+    'document_summary',
+    'document_summary',
+    'Synthetic Document Summarization',
+    'Agent synthesis of documents with markdown briefs',
+    'agent',
+    'low',
+    JSON.stringify(['read_file', 'write_summary']),
+    0,
+    'reviewer',
+    30.0,
+    50.0
+  );
+  insertTaskType.run(
+    'export_request',
+    'export_request',
+    'Bulk Intelligence Dataset Export',
+    'Transmission of processed intelligence to external partner networks',
+    'approval_required',
+    'medium',
+    JSON.stringify(['read_file', 'export_dataset']),
+    1,
+    'reviewer',
+    30.0,
+    50.0
+  );
+  insertTaskType.run(
+    'dataset_export',
+    'dataset_export',
+    'Sensitive Dataset Export',
+    'Export requiring dual-custody approval before execution',
+    'approval_required',
+    'medium',
+    JSON.stringify(['read_file', 'export_dataset']),
+    1,
+    'reviewer',
+    30.0,
+    50.0
+  );
+  insertTaskType.run(
+    'manual_security_audit',
+    'manual_security_audit',
+    'Human-Only Classified Audit Review',
+    'Mandatory manual scrutiny of access logs and credential posture',
+    'human',
+    'high',
+    JSON.stringify([]),
+    1,
+    'admin',
+    45.0,
+    75.0
+  );
+  insertTaskType.run(
+    'vendor_audit',
+    'vendor_audit',
+    'Vendor Compliance Clearance',
+    'Human-in-the-loop manual compliance audit and vendor verification',
+    'human',
+    'medium',
+    JSON.stringify([]),
+    1,
+    'reviewer',
+    30.0,
+    50.0
+  );
+  insertTaskType.run(
+    'file_purge',
+    'file_purge',
+    'Document Deletion & Purging',
+    'Permanent destruction of synthetic files',
+    'human',
+    'critical',
+    JSON.stringify(['delete_file']),
+    1,
+    'admin',
+    20.0,
+    35.0
+  );
 
-  // 4. Seed Policies (Versioned, FR-2)
+  // 4. Seed Policies
   const insertPolicy = targetDb.prepare(`
     INSERT INTO policies (id, version, name, applicable_agent_id, operation, resource_pattern, decision, severity, pause_on_violation, open_incident, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -66,11 +156,11 @@ export function seedDatabase(db?: DatabaseSync): void {
   insertPolicy.run('POL-DOC-EXPORT', 'v1.0', 'Require Approval for External Export', 'doc-agent-01', 'export_dataset', 'synthetic://documents/*', 'require_approval', 'medium', 0, 0, now);
   insertPolicy.run('POL-DOC-DELETE', 'v1.0', 'Strictly Prohibit File Deletion', null, 'delete_file', '*', 'block', 'high', 1, 1, now);
 
-  // 5. Seed Agent (FR-1, Section 3.4 status model & Section 4.4 faulty workflow)
+  // 5. Seed Agents
   const faultyWorkflow = [
     { step_id: 'step_1', operation: 'read_file', resource: 'synthetic://documents/defense_intel_brief_2026.txt', params: {} },
     { step_id: 'step_2', operation: 'write_summary', resource: 'synthetic://reports/summary_intel_2026.txt', params: { format: 'markdown' } },
-    { step_id: 'step_3', operation: 'delete_file', resource: 'synthetic://documents/defense_intel_brief_2026.txt', params: {} } // Prohibited step causing violation
+    { step_id: 'step_3', operation: 'delete_file', resource: 'synthetic://documents/defense_intel_brief_2026.txt', params: {} }
   ];
 
   const insertAgent = targetDb.prepare(`
@@ -96,7 +186,152 @@ export function seedDatabase(db?: DatabaseSync): void {
     now
   );
 
-  // 6. Seed Genesis Audit Event
+  insertAgent.run(
+    'data-exporter-99',
+    'Bulk Intelligence Exporter',
+    'agnt_live_exporter_key_99',
+    'usr-researcher',
+    'Joint Analysis Division',
+    'Packaging and transmission of cleared intelligence briefs',
+    'medium',
+    JSON.stringify(['read_file', 'export_dataset']),
+    JSON.stringify(['synthetic://documents/*']),
+    'restricted',
+    'v1.0',
+    JSON.stringify([]),
+    0.20,
+    now - 7200000,
+    now
+  );
+
+  insertAgent.run(
+    'ops-worker-02',
+    'Synthetic Archive Janitor',
+    'agnt_live_ops_worker_key_02',
+    'usr-admin',
+    'System Operations',
+    'Lifecycle management and simulated cache pruning',
+    'high',
+    JSON.stringify(['read_file', 'archive_file']),
+    JSON.stringify(['synthetic://archive/*']),
+    'paused',
+    'v1.0',
+    JSON.stringify([]),
+    0.02,
+    now - 14400000,
+    now - 3600000
+  );
+
+  // 6. Seed Baseline Incident inc-demo-001 (Workstream C & Demo)
+  targetDb.prepare(`
+    INSERT INTO action_requests (
+      id, agent_id, tool, operation, resource, parameters,
+      task_type, handler, handler_reason, resource_sensitivity, correlation_id,
+      gate_decision, gate_reason_code, policy_id, policy_version, explanation,
+      received_at, gated_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    'req-demo-violation-01',
+    'data-exporter-99',
+    'file_purger',
+    'delete_file',
+    'synthetic://documents/defense_intel_brief_2026.txt',
+    '{}',
+    'file_purge',
+    'blocked',
+    'Operation delete_file is strictly blocked by POL-DOC-DELETE',
+    'top_secret',
+    'corr-demo-inc-01',
+    'BLOCK',
+    'POLICY_RULE_VIOLATION',
+    'POL-DOC-DELETE',
+    'v1.0',
+    'Prohibited destructive operation on protected synthetic intelligence document',
+    now - 7200000,
+    now - 7200000
+  );
+
+  targetDb.prepare(`
+    INSERT INTO executions (id, request_id, status, non_execution_reason, created_at)
+    VALUES (?, ?, 'NOT_EXECUTED', 'BLOCKED_BY_POLICY', ?)
+  `).run('exec-demo-01', 'req-demo-violation-01', now - 7200000);
+
+  targetDb.prepare(`
+    INSERT INTO incidents (
+      id, agent_id, triggering_request_id, severity, policy_id, policy_version,
+      status, pre_incident_status, evidence_summary, signature_id, diagnostic_result, opened_at, agent_owner_at_time
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    'inc-demo-001',
+    'data-exporter-99',
+    'req-demo-violation-01',
+    'critical',
+    'POL-DOC-DELETE',
+    'v1.0',
+    'OPEN',
+    'active',
+    'Prohibited delete_file attempted on protected synthetic intelligence document.',
+    'SIG-001',
+    JSON.stringify({
+      causeCategory: 'WORKFLOW_MISCONFIGURATION',
+      explanation: 'Workflow step requested unauthorized delete_file tool operation',
+      recommendedAction: 'Sanitize workflow steps to remove file deletion'
+    }),
+    now - 7200000,
+    'usr-researcher'
+  );
+
+  // 7. Seed Sample Initial Tasks (Workstream A)
+  const insertTask = targetDb.prepare(`
+    INSERT INTO tasks (id, title, task_type, description, payload, handler, handler_reason, assigned_agent_id, risk_category, status, correlation_id, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  insertTask.run(
+    'task-sample-01',
+    'Ingest Weekly Regional Satellite Report',
+    'document_analysis',
+    'Process synthetic document briefing for Eastern command',
+    JSON.stringify({ resource: 'synthetic://documents/defense_intel_brief_2026.txt' }),
+    'agent',
+    'Task matches allowed document_analysis capabilities for doc-agent-01',
+    'doc-agent-01',
+    'low',
+    'QUEUED',
+    'corr-sample-01',
+    now - 3600000
+  );
+  insertTask.run(
+    'task-sample-02',
+    'Manual Cryptographic Access Review',
+    'manual_security_audit',
+    'Quarterly human review of credential posture',
+    JSON.stringify({ auditScope: 'Level 4 Security Matrix' }),
+    'human',
+    'High-risk task restricted to human queue by task type policy',
+    null,
+    'high',
+    'QUEUED',
+    'corr-sample-02',
+    now - 1800000
+  );
+  insertTask.run(
+    'task-sample-03',
+    'Cross-Agency Strategic Threat Assessment',
+    'document_summary',
+    'Escalated synthetic assessment requiring intelligence lead signoff',
+    JSON.stringify({ classification: 'Inter-Agency' }),
+    'escalated',
+    'Escalated to lead analyst due to inter-agency security protocols',
+    'doc-agent-01',
+    'high',
+    'ESCALATED',
+    'corr-sample-03',
+    now - 900000
+  );
+
+  // 8. Seed Genesis Audit Event
   const genesisHash = crypto.createHash('sha256').update('GENESIS_EVENT_' + now).digest('hex');
   const insertAudit = targetDb.prepare(`
     INSERT INTO audit_events (id, sequence, event_type, actor_type, actor_id, agent_id, agent_owner_at_time, policy_id, policy_version, resource_reference, decision, outcome, request_id, incident_id, correction_id, safe_details, prev_hash, hash, timestamp)
@@ -119,10 +354,33 @@ export function seedDatabase(db?: DatabaseSync): void {
     null,
     null,
     null,
-    JSON.stringify({ status: 'clean_seed_applied', agents_count: 1, policies_count: 5 }),
+    JSON.stringify({ status: 'clean_seed_applied', agents_count: 3, policies_count: 5 }),
     null,
     genesisHash,
-    now
+    now - 7300000
+  );
+
+  const incidentEventHash = crypto.createHash('sha256').update(genesisHash + 'VIOLATION_CONTAINED' + now).digest('hex');
+  insertAudit.run(
+    'evt-inc-demo-001',
+    2,
+    'VIOLATION_CONTAINED',
+    'system',
+    'governance-gateway',
+    'data-exporter-99',
+    'usr-researcher',
+    'POL-DOC-DELETE',
+    'v1.0',
+    'synthetic://documents/defense_intel_brief_2026.txt',
+    'BLOCK',
+    'BLOCKED_NO_SIDE_EFFECTS',
+    'req-demo-violation-01',
+    'inc-demo-001',
+    null,
+    JSON.stringify({ reasonCode: 'POLICY_RULE_VIOLATION', incidentOpened: true }),
+    genesisHash,
+    incidentEventHash,
+    now - 7200000
   );
 }
 

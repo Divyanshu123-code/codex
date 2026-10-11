@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { getDatabase } from '../db/connection.js';
 import { diagnoseIncident } from '../engine/diagnostics.js';
+import { generateIncidentReport } from '../engine/incidentReport.js';
 
 export const incidentsRouter = Router();
 
@@ -42,6 +43,16 @@ incidentsRouter.get('/:id', (req: Request, res: Response) => {
   }
 });
 
+// GET /api/incidents/:id/report (Audit-Ready Incident Accountability Report)
+incidentsRouter.get('/:id/report', (req: Request, res: Response) => {
+  try {
+    const report = generateIncidentReport(req.params.id);
+    res.json(report);
+  } catch (err: any) {
+    res.status(404).json({ error: err.message });
+  }
+});
+
 // POST /api/incidents/:id/diagnose (Run bounded diagnostics)
 incidentsRouter.post('/:id/diagnose', (req: Request, res: Response) => {
   try {
@@ -51,3 +62,4 @@ incidentsRouter.post('/:id/diagnose', (req: Request, res: Response) => {
     res.status(400).json({ error: err.message });
   }
 });
+

@@ -236,25 +236,87 @@ When presenting to hackathon judges, follow this 3-minute sequence using the Ope
 | Append-Only Audit Trail with SHA-256 Hash Chaining | **Implemented (Tamper-evident)** |
 | Diagnostics | **Implemented (Known-pattern triage over closed catalog)** |
 | Sandbox, Structural & Behavioural Checks, Verified Recovery | **Implemented on synthetic workflows** |
+| Task Allocation & Deterministic Escalation (Workstream A) | **Implemented & Tested** |
+| Leadership Risk, Cost, & Value Dashboard (Workstream B) | **Implemented & Tested** |
+| Audit-Ready 11-Section Incident Accountability Report (Workstream C) | **Implemented & Tested** |
+| Operator Console UI Integration (Workstream D) | **Implemented (8 interactive tabs)** |
 | Agents, Tools, Resources, Intelligence Briefs | **Simulated (Synthetic data only)** |
-| Task Allocation, Leadership Dashboard, Full Accountability Reporting | **Researched / Schema-ready (Section 3.6 metadata captured)** |
+| Cost & Labor Value Savings | **Simulated Estimates (Clearly Labeled)** |
 | Autonomous Systems Infrastructure, Classified Defense Integration | **Future vision** |
 | Production readiness / Regulatory certification | **Not claimed** |
 
 ---
 
-## 8. Git Commit Log
+## 8. Gap-Closure Implementation Details
+
+### Workstream A: Human-versus-Agent Work Allocation
+- **Endpoints:** `GET /api/task-types`, `GET /api/tasks`, `POST /api/tasks`, `POST /api/tasks/:id/escalate`
+- **Engine:** `backend/src/engine/allocation.ts`
+- **Deterministic Rules:**
+  - Prohibited operation (e.g. `delete_file` or `file_purge`) is **BLOCKED** and never assigned to evict policy.
+  - Paused agent cannot receive dispatched work (**BLOCKED**).
+  - Human-only tasks enter human queue.
+  - Approval-required tasks require dual-custody authorization.
+  - Standard agent-eligible tasks enter agent execution queue.
+- **Escalation:** Reassigns task with reason, escalation target role, and audit event.
+- **Tests:** `backend/tests/allocation.test.ts` (7 passing tests).
+
+### Workstream B: Leadership Risk/Cost/Usage Dashboard
+- **Endpoint:** `GET /api/dashboard/overview?from=...&to=...`
+- **Engine:** `backend/src/engine/dashboard.ts`
+- **Metric Sections:**
+  - **Risk:** Total, active, restricted, paused agents; open incidents by severity; blocked violations; mean time to contain (~450ms) and recover.
+  - **Usage:** Tasks received, tasks by handler (agent, human, escalated, blocked); requests by operation; execution outcomes (succeeded, failed, not executed).
+  - **Human Intervention:** Approvals (pending, approved, rejected); pause events; recovery attempts.
+  - **Cost/Value Model:** Estimated operating cost, estimated labor value created ($100/hr baseline human effort), net synthetic value created.
+  - **Mandatory Banner:** `SIMULATED ESTIMATE --- NOT VERIFIED SAVINGS`.
+- **Tests:** `backend/tests/dashboard.test.ts` (4 passing tests).
+
+### Workstream C: Audit-Ready Incident Accountability Report
+- **Endpoint:** `GET /api/incidents/:id/report`
+- **Engine:** `backend/src/engine/incidentReport.ts`
+- **11 Explicit Sections:**
+  1. Incident Identification (ID, severity, status, timestamps)
+  2. Agent and Ownership at Event Time
+  3. Task and Triggering Action Request
+  4. Policy Evaluation Gate (policy ID, version, decision, reason code)
+  5. Human Authorization Review (approver, role, reason, timestamps)
+  6. Execution Outcome (status, non-execution reason, duration)
+  7. Containment Action (violation type, status transition, automated enforcement)
+  8. Automated Diagnostics (signature ID, cause category, triage explanation)
+  9. Correction Proposal & Sandbox Verification (S1-S6, B1-B6, verdict)
+  10. Revalidation & Central Resume Gate (conditions R1-R9, unmet conditions)
+  11. Chronological Audit Timeline (sequence, actors, decisions, SHA-256 hashes)
+- **Tests:** `backend/tests/report.test.ts` (4 passing tests).
+
+### Workstream D: Operator Console UI Integration
+- **Frontend App:** `frontend/src/App.tsx` updated with 8 comprehensive tabs:
+  1. Leadership Dashboard
+  2. Work Allocation & Task Intake
+  3. Action Launcher (Scenarios A, B, C)
+  4. Approvals Inbox
+  5. Incidents & Audit Accountability Report
+  6. Sandbox & Verified Recovery
+  7. Agent Registry & Versioned Policies
+  8. Append-Only Audit Trail
+
+---
+
+## 9. Verification Summary
 
 ```text
-cf01621 feat(phase-9): rehearsal test suite, G4 verification, and repeatable demo lifecycle
-cc42d48 feat(phase-8): minimal operator console UI with scenario launcher, approval inbox, diagnostics, and recovery flow
-920fab8 feat(phase-6-7): bounded diagnostics, sandbox checks S1-S6/B1-B6, central resume gate R1-R9, and G3 invariants
-fcdf5f0 feat(phase-4-5): human approval queue, revalidation, incident containment, and G2 invariants
-bdffcac feat(phase-3): protected tool execution boundary, gateway enforcement, and G1 invariants
-c2d830a feat(phase-2): agent registry, versioned policies, and deterministic evaluator
-e1999a7 feat(phase-1): runnable skeleton with backend schema, seed data, vitest suite, and vite frontend
-b8bfcc9 docs: update to v2 with binding design decisions
-40cd243 docs: add technology and feasibility specification
-b6070be docs: add PS5 requirements and implementation plan
-1ac9b99 Initial commit
+✓ tests/rehearsal.test.ts (1 test)
+✓ tests/allocation.test.ts (7 tests)
+✓ tests/approvals.test.ts (6 tests)
+✓ tests/api.test.ts (5 tests)
+✓ tests/gateway.test.ts (4 tests)
+✓ tests/report.test.ts (4 tests)
+✓ tests/dashboard.test.ts (4 tests)
+✓ tests/health.test.ts (2 tests)
+✓ tests/recovery.test.ts (2 tests)
+✓ tests/evaluator.test.ts (10 tests)
+
+Test Files:  10 passed (10)
+Tests:       45 passed (45)
+Duration:    4.60s
 ```
