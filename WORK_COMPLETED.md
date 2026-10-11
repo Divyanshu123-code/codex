@@ -29,8 +29,8 @@ The system intercepts proposed agent actions, executes a deterministic, multi-le
 | **Enforcement** | Deterministic Pure TypeScript Engine | **Zero LLM in the critical enforcement path**; 100% predictable and reproducible decisions |
 | **Tool Boundary** | HMAC Signed Execution Tokens | Protected simulated tools are private; calls without valid tokens signed by the gateway are rejected |
 | **Audit Log** | SHA-256 Hash Chaining | Append-only, tamper-evident chronological event log |
-| **Testing** | Vitest + Supertest | 30 unit, integration, and rehearsal tests executed in under 3 seconds |
-| **Frontend** | React 19 + Vite + TypeScript | 6-tab operator console with 2.5s live polling |
+| **Testing** | Vitest + Supertest | 45 unit, integration, and rehearsal tests executed in ~5 seconds |
+| **Frontend** | React 19 + Vite + TypeScript | 8-tab operator console with 2.5s live polling |
 
 ---
 
@@ -52,7 +52,10 @@ codex/
 │   │   │   ├── approval.ts         # Human authorization, role checks & revalidation
 │   │   │   ├── diagnostics.ts      # Bounded triage over closed signature catalog
 │   │   │   ├── sandbox.ts          # S1-S6 structural & B1-B6 behavioural test runner
-│   │   │   └── resumeGate.ts       # Central resume gate enforcing conditions R1-R9
+│   │   │   ├── resumeGate.ts       # Central resume gate enforcing conditions R1-R9
+│   │   │   ├── allocation.ts       # Deterministic human vs agent work intake & escalation
+│   │   │   ├── dashboard.ts        # Leadership risk, usage, intervention & value engine
+│   │   │   └── incidentReport.ts   # 11-section audit-ready incident accountability reporter
 │   │   ├── tools/
 │   │   │   └── protectedTools.ts   # Private simulated tools & HMAC execution validator
 │   │   └── routes/
@@ -62,6 +65,8 @@ codex/
 │   │       ├── approvals.ts        # /api/approvals (Inbox & decision endpoints)
 │   │       ├── incidents.ts        # /api/incidents (Incident records & /diagnose)
 │   │       ├── corrections.ts      # /api/corrections (Sandbox testing & application)
+│   │       ├── tasks.ts            # /api/tasks & /api/task-types (Work allocation & escalation)
+│   │       ├── dashboard.ts        # /api/dashboard/overview (Executive risk & telemetry)
 │   │       └── audit.ts            # /api/audit (Chronological audit history)
 │   └── tests/
 │       ├── health.test.ts          # Phase 1: Health check & seed reset tests (2 tests)
@@ -70,16 +75,20 @@ codex/
 │       ├── gateway.test.ts         # Phase 3: Gate G1 & tool boundary tests (4 tests)
 │       ├── approvals.test.ts       # Phase 4 & 5: Gate G2 approval & revalidation (6 tests)
 │       ├── recovery.test.ts        # Phase 6 & 7: Gate G3 sandbox & recovery tests (2 tests)
-│       └── rehearsal.test.ts       # Phase 9: Gate G4 end-to-end full rehearsal (1 test)
+│       ├── rehearsal.test.ts       # Phase 9: Gate G4 end-to-end full rehearsal (1 test)
+│       ├── allocation.test.ts      # Gap-Closure A: Work intake & deterministic routing (7 tests)
+│       ├── dashboard.test.ts       # Gap-Closure B: Leadership metrics & value estimation (4 tests)
+│       └── report.test.ts          # Gap-Closure C: 11-section accountability report (4 tests)
 ├── frontend/
 │   ├── src/
-│   │   ├── App.tsx                 # 6-tab Operator Console UI with live telemetry
+│   │   ├── App.tsx                 # 8-tab Operator Console UI with live telemetry
 │   │   └── main.tsx                # React root mount
 │   ├── vite.config.ts              # Vite proxy configuration for /api to :4000
 │   └── package.json
 ├── REQUIREMENTS.md                 # Baseline PS5 specifications
 ├── IMPLEMENTATION_PLAN.md          # 10-phase execution plan
 ├── TECH_AND_FEASIBILITY.md         # Binding design decisions (v2)
+├── GAP_CLOSURE_PLAN.md             # Detailed gap closure implementation plan
 ├── WORK_COMPLETED.md               # This comprehensive progress report
 ├── README.md                       # Quickstart, local run & test instructions
 └── package.json                    # Root npm workspace script runner
@@ -187,8 +196,11 @@ tests/recovery.test.ts      2 passed      Bounded diagnostics, Diff Guard reject
 tests/api.test.ts           5 passed      REST endpoints for agents, policies, and action evaluate
 tests/health.test.ts        2 passed      Health check telemetry, database connection, demo reset
 tests/rehearsal.test.ts     1 passed      End-to-end full demo lifecycle rehearsal from clean state
+tests/allocation.test.ts    7 passed      Deterministic task intake, routing, role checks & escalation
+tests/dashboard.test.ts     4 passed      Executive risk, usage, intervention metrics & value models
+tests/report.test.ts        4 passed      11-section audit-ready incident accountability report
 -----------------------------------------------------------------------------------------------------
-TOTAL:                     30 PASSED (100% Green across 7 test suites)
+TOTAL:                     45 PASSED (100% Green across 10 test suites)
 ```
 
 ---
@@ -198,29 +210,32 @@ TOTAL:                     30 PASSED (100% Green across 7 test suites)
 When presenting to hackathon judges, follow this 3-minute sequence using the Operator Console at `http://localhost:5173`:
 
 1. **Clean Baseline:** Click **"🔄 Demo Reset"** in the top right. Show that `doc-agent-01` is `ACTIVE` with `POL-DOC-READ` and `POL-DOC-DELETE` in place.
-2. **Scenario A (Permitted):** In Tab 1, click **"Run Scenario A"**.
+2. **Scenario A (Permitted):** In **Tab 3 (Action Launcher)**, click **"Run Scenario A"**.
    - Show Decision Badge: `ALLOW`.
    - Show Execution Badge: `SUCCEEDED`.
    - Point out that simulated protected document was read and logged.
 3. **Scenario B (Approval Required):** Click **"Run Scenario B"**.
    - Show Decision Badge: `REQUIRE_APPROVAL`.
    - Show Execution Badge: `NOT_EXECUTED (APPROVAL_PENDING)`.
-   - Switch to Tab 2 (Approvals), enter a reason, and click **"Approve & Execute"**.
+   - Switch to **Tab 4 (Approvals Inbox)**, enter a reason, and click **"Approve & Execute"**.
    - Show that execution now transitions to `SUCCEEDED`.
-4. **Scenario C (Violation Containment):** Return to Tab 1 and click **"Run Scenario C"**.
+4. **Scenario C (Violation Containment):** Return to **Tab 3** and click **"Run Scenario C"**.
    - Show Decision Badge: `BLOCK`.
    - Show Execution Badge: `NOT_EXECUTED (BLOCKED_BY_POLICY)`.
    - Show that the agent badge in the header instantly flipped to **`PAUSED`**.
-   - Switch to Tab 3 (Incidents) to show that an incident was automatically opened.
+   - Switch to **Tab 5 (Incidents)** to show that an incident was automatically opened.
 5. **Diagnostics & Sandbox Repair:**
-   - In Tab 3, click **"Run Signature Diagnostics"**. Show that it identified `SIG-DISALLOWED-OP` from recorded telemetry.
-   - Switch to Tab 4 (Sandbox & Recovery).
+   - In **Tab 5**, click **"Run Signature Diagnostics"**. Show that it identified `SIG-DISALLOWED-OP` from recorded telemetry.
+   - Switch to **Tab 6 (Sandbox & Verified Recovery)**.
    - Click **"Test Faulty/Attacking Patch"**: Show the Diff Guard catch it immediately (`FAIL` on S2/S3). The agent remains `PAUSED`.
    - Click **"Test Safe Correction"**: Show that all structural checks (S1–S6) and behavioural checks (B1–B6) pass with verdict `PASS`.
    - Click **"1. Approve Correction"** (Reviewer role).
    - Click **"2. Apply Patch to Agent"**.
    - Click **"3. Resume Agent"**: Show that the Central Resume Gate validates all preconditions (R1–R9) and transitions the agent back to **`ACTIVE`**.
-6. **Audit Trail:** Switch to Tab 6 to show the complete tamper-evident audit history with linked correlation IDs and SHA-256 hashes.
+6. **Accountability & Leadership Reporting:**
+   - Switch to **Tab 5 (Incidents)** and click **"Generate 11-Section Audit Report"** to show full incident accountability breakdown.
+   - Switch to **Tab 1 (Leadership Dashboard)** to view real-time risk posture, usage, intervention metrics, and cost/value estimates with the mandatory `SIMULATED ESTIMATE` banner.
+   - Switch to **Tab 8 (Audit Trail)** to show the complete tamper-evident audit history with linked correlation IDs and SHA-256 hashes.
 
 ---
 
