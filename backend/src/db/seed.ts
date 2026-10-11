@@ -63,7 +63,7 @@ export function seedDatabase(db?: DatabaseSync): void {
   insertPolicy.run('POL-DOC-READ', 'v1.0', 'Allow Document Reads in Scope', 'doc-agent-01', 'read_file', 'synthetic://documents/*', 'allow', 'low', 0, 0, now);
   insertPolicy.run('POL-DOC-WRITE', 'v1.0', 'Allow Summary Creation', 'doc-agent-01', 'write_summary', 'synthetic://reports/*', 'allow', 'low', 0, 0, now);
   insertPolicy.run('POL-DOC-ARCHIVE', 'v1.0', 'Allow Document Archival', 'doc-agent-01', 'archive_file', 'synthetic://archive/*', 'allow', 'low', 0, 0, now);
-  insertPolicy.run('POL-DOC-EXPORT', 'v1.0', 'Require Approval for External Export', 'doc-agent-01', 'export_dataset', 'synthetic://*', 'require_approval', 'medium', 0, 0, now);
+  insertPolicy.run('POL-DOC-EXPORT', 'v1.0', 'Require Approval for External Export', 'doc-agent-01', 'export_dataset', 'synthetic://documents/*', 'require_approval', 'medium', 0, 0, now);
   insertPolicy.run('POL-DOC-DELETE', 'v1.0', 'Strictly Prohibit File Deletion', null, 'delete_file', '*', 'block', 'high', 1, 1, now);
 
   // 5. Seed Agent (FR-1, Section 3.4 status model & Section 4.4 faulty workflow)
@@ -86,7 +86,7 @@ export function seedDatabase(db?: DatabaseSync): void {
     'Intel Governance Taskforce',
     'Autonomous ingestion, analysis, and briefing preparation of synthetic intelligence documents',
     'low',
-    JSON.stringify(['read_file', 'write_summary', 'archive_file']),
+    JSON.stringify(['read_file', 'write_summary', 'archive_file', 'export_dataset']),
     JSON.stringify(['synthetic://documents/*', 'synthetic://reports/*', 'synthetic://archive/*']),
     'active',
     'v1.0',
@@ -124,8 +124,6 @@ export function seedDatabase(db?: DatabaseSync): void {
     genesisHash,
     now
   );
-
-  console.log('✅ Seed completed successfully with synthetic defense agent, policies, and users.');
 }
 
 if (process.argv[1] && process.argv[1].endsWith('seed.ts')) {

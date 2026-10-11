@@ -7,7 +7,17 @@ dotenv.config();
 
 let dbInstance: DatabaseSync | null = null;
 
-export function getDatabase(dbPath?: string): DatabaseSync {
+export function getDatabase(dbPath?: string, forceNew: boolean = false): DatabaseSync {
+  if (dbInstance && !forceNew && !dbPath) {
+    return dbInstance;
+  }
+
+  if (forceNew) {
+    const db = new DatabaseSync(dbPath || ':memory:');
+    db.exec('PRAGMA foreign_keys = ON;');
+    return db;
+  }
+
   if (dbInstance) {
     return dbInstance;
   }

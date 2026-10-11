@@ -2,10 +2,11 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { getDatabase } from '../db/connection.js';
 import { evaluatePolicy, AgentRecord, PolicyRecord, OperationCatalogRecord } from '../engine/evaluator.js';
+import { routeAction } from '../engine/gateway.js';
 
 export const actionsRouter = Router();
 
-const evaluateActionSchema = z.object({
+const actionSchema = z.object({
   agentId: z.string().min(1),
   tool: z.string().min(1),
   operation: z.string().min(1),
@@ -16,7 +17,7 @@ const evaluateActionSchema = z.object({
 // POST /api/actions/evaluate (Evaluation without execution)
 actionsRouter.post('/evaluate', (req: Request, res: Response) => {
   try {
-    const parsed = evaluateActionSchema.safeParse(req.body);
+    const parsed = actionSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ error: 'Invalid action payload', details: parsed.error.format() });
     }
@@ -77,6 +78,26 @@ actionsRouter.post('/evaluate', (req: Request, res: Response) => {
       resource,
       evaluation
     });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/actions/route (Full enforcement gateway execution)
+actionsRouter.post('/route', (req: Request, res: Response) => {
+  try {
+    const parsed = actionSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid action payload', details: parsed.error.format() });
+    }
+
+    const { agentId, tool, operation, resource, parameters } = parsed.data;
+    const result = routeAction(
+      { agent_id: agentId, tool, operation, resource, parameters },
+      { type: 'agent', id: agentId }
+    );
+
+    res.json(result);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
