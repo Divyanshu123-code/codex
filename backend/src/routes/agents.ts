@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { getDatabase } from '../db/connection.js';
+import { transitionAgentStatus } from '../engine/gateway.js';
 
 export const agentsRouter = Router();
 
@@ -109,5 +110,29 @@ agentsRouter.post('/', (req: Request, res: Response) => {
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/agents/:id/pause (Administrator containment control, FR-6)
+agentsRouter.post('/:id/pause', (req: Request, res: Response) => {
+  try {
+    const reason = req.body.reason || 'Manual administrator pause';
+    const actorId = req.body.actorId || 'usr-admin';
+    transitionAgentStatus(req.params.id, 'paused', { type: 'human', id: actorId }, reason);
+    res.json({ success: true, message: `Agent ${req.params.id} has been paused.` });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/agents/:id/restrict (Administrator restriction control, FR-6)
+agentsRouter.post('/:id/restrict', (req: Request, res: Response) => {
+  try {
+    const reason = req.body.reason || 'Manual administrator restriction';
+    const actorId = req.body.actorId || 'usr-admin';
+    transitionAgentStatus(req.params.id, 'restricted', { type: 'human', id: actorId }, reason);
+    res.json({ success: true, message: `Agent ${req.params.id} is now restricted.` });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
   }
 });

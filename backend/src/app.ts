@@ -5,6 +5,9 @@ import { seedDatabase } from './db/seed.js';
 import { agentsRouter } from './routes/agents.js';
 import { policiesRouter } from './routes/policies.js';
 import { actionsRouter } from './routes/actions.js';
+import { approvalsRouter } from './routes/approvals.js';
+import { incidentsRouter } from './routes/incidents.js';
+import { auditRouter } from './routes/audit.js';
 
 export function createApp(): Express {
   const app = express();
@@ -16,6 +19,9 @@ export function createApp(): Express {
   app.use('/api/agents', agentsRouter);
   app.use('/api/policies', policiesRouter);
   app.use('/api/actions', actionsRouter);
+  app.use('/api/approvals', approvalsRouter);
+  app.use('/api/incidents', incidentsRouter);
+  app.use('/api/audit', auditRouter);
 
   // Health check endpoint (Phase 1 deliverable)
   app.get('/api/health', (req: Request, res: Response) => {
@@ -24,6 +30,8 @@ export function createApp(): Express {
       const userCountRow = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
       const agentCountRow = db.prepare('SELECT COUNT(*) as count FROM agents').get() as { count: number };
       const policyCountRow = db.prepare('SELECT COUNT(*) as count FROM policies').get() as { count: number };
+      const incidentCountRow = db.prepare("SELECT COUNT(*) as count FROM incidents WHERE status = 'OPEN'").get() as { count: number };
+      const approvalCountRow = db.prepare("SELECT COUNT(*) as count FROM approvals WHERE status = 'PENDING'").get() as { count: number };
 
       res.status(200).json({
         status: 'ok',
@@ -33,7 +41,9 @@ export function createApp(): Express {
           connected: true,
           users: userCountRow.count,
           agents: agentCountRow.count,
-          policies: policyCountRow.count
+          policies: policyCountRow.count,
+          openIncidents: incidentCountRow.count,
+          pendingApprovals: approvalCountRow.count
         }
       });
     } catch (error: any) {
