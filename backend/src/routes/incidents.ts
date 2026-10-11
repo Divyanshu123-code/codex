@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { getDatabase } from '../db/connection.js';
+import { diagnoseIncident } from '../engine/diagnostics.js';
 
 export const incidentsRouter = Router();
 
@@ -38,5 +39,15 @@ incidentsRouter.get('/:id', (req: Request, res: Response) => {
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/incidents/:id/diagnose (Run bounded diagnostics)
+incidentsRouter.post('/:id/diagnose', (req: Request, res: Response) => {
+  try {
+    const result = diagnoseIncident(req.params.id);
+    res.json(result);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
   }
 });

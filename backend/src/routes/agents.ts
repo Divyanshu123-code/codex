@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { getDatabase } from '../db/connection.js';
 import { transitionAgentStatus } from '../engine/gateway.js';
+import { resumeAgent } from '../engine/resumeGate.js';
 
 export const agentsRouter = Router();
 
@@ -134,5 +135,36 @@ agentsRouter.post('/:id/restrict', (req: Request, res: Response) => {
     res.json({ success: true, message: `Agent ${req.params.id} is now restricted.` });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
+  }
+});
+
+const resumeSchema = z.object({
+  actorRole: z.string().default('admin'),
+  actorId: z.string().default('usr-admin'),
+  reason: z.string().min(1, 'Reason is mandatory for resumption')
+});
+
+// POST /api/agents/:id/resume (Centralized resume gate, Section 3.5)
+agentsRouter.post('/:id/resume', (req: Request, res: Response) => {
+  try {
+    const parsed = resumeSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid resume payload', details: parsed.error.format() });
+    }
+
+    const { actorRole, actorId, reason } = parsed.data;
+    const result = resumeAgent(req.params.id, { role: actorRole, id: actorId }, reason);
+
+    if (!result.success) {
+      return res.status(412).json({
+        error: 'Preconditions not met for resumption.',
+        unmet: result.unmet,
+        status: result.status
+      });
+    }
+
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });

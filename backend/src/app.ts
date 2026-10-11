@@ -8,6 +8,7 @@ import { actionsRouter } from './routes/actions.js';
 import { approvalsRouter } from './routes/approvals.js';
 import { incidentsRouter } from './routes/incidents.js';
 import { auditRouter } from './routes/audit.js';
+import { correctionsRouter } from './routes/corrections.js';
 
 export function createApp(): Express {
   const app = express();
@@ -22,6 +23,7 @@ export function createApp(): Express {
   app.use('/api/approvals', approvalsRouter);
   app.use('/api/incidents', incidentsRouter);
   app.use('/api/audit', auditRouter);
+  app.use('/api/corrections', correctionsRouter);
 
   // Health check endpoint (Phase 1 deliverable)
   app.get('/api/health', (req: Request, res: Response) => {
