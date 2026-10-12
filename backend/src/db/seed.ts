@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { getDatabase } from './connection.js';
 import { initializeSchema } from './schema.js';
 import { hashPassword } from '../auth/crypto.js';
+import { computeAuditEventHash } from '../engine/auditLedger.js';
 
 export function seedDatabase(db?: DatabaseSync): void {
   const targetDb = db || getDatabase();
@@ -564,8 +565,19 @@ export function seedDatabase(db?: DatabaseSync): void {
     now - 900000
   );
 
-  // 8. Seed Genesis Audit Event
-  const genesisHash = crypto.createHash('sha256').update('GENESIS_EVENT_' + now).digest('hex');
+  // 8. Seed Genesis Audit Event (Cryptographic Hash Chain)
+  const genesisTimestamp = now - 7300000;
+  const genesisHash = computeAuditEventHash({
+    id: 'evt-genesis-0001',
+    sequence: 1,
+    event_type: 'SYSTEM_INITIALIZED',
+    actor_type: 'system',
+    actor_id: 'system',
+    agent_id: 'doc-agent-01',
+    prev_hash: null,
+    timestamp: genesisTimestamp
+  });
+
   const insertAudit = targetDb.prepare(`
     INSERT INTO audit_events (id, sequence, event_type, actor_type, actor_id, agent_id, agent_owner_at_time, policy_id, policy_version, resource_reference, decision, outcome, request_id, incident_id, correction_id, safe_details, prev_hash, hash, timestamp)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -590,10 +602,21 @@ export function seedDatabase(db?: DatabaseSync): void {
     JSON.stringify({ status: 'clean_seed_applied', agents_count: 3, policies_count: 5 }),
     null,
     genesisHash,
-    now - 7300000
+    genesisTimestamp
   );
 
-  const incidentEventHash = crypto.createHash('sha256').update(genesisHash + 'VIOLATION_CONTAINED' + now).digest('hex');
+  const incidentTimestamp = now - 7200000;
+  const incidentEventHash = computeAuditEventHash({
+    id: 'evt-inc-demo-001',
+    sequence: 2,
+    event_type: 'VIOLATION_CONTAINED',
+    actor_type: 'system',
+    actor_id: 'governance-gateway',
+    agent_id: 'data-exporter-99',
+    prev_hash: genesisHash,
+    timestamp: incidentTimestamp
+  });
+
   insertAudit.run(
     'evt-inc-demo-001',
     2,
@@ -613,11 +636,22 @@ export function seedDatabase(db?: DatabaseSync): void {
     JSON.stringify({ reasonCode: 'POLICY_RULE_VIOLATION', incidentOpened: true }),
     genesisHash,
     incidentEventHash,
-    now - 7200000
+    incidentTimestamp
   );
 
   // 9. Seed Sample Overturned Decision & Reopen Scenario (Section 6c)
-  const overturnedHash = crypto.createHash('sha256').update(incidentEventHash + 'DECISION_OVERTURNED' + now).digest('hex');
+  const overturnTimestamp = now - 1800000;
+  const overturnedHash = computeAuditEventHash({
+    id: 'evt-overturn-demo-001',
+    sequence: 3,
+    event_type: 'DECISION_OVERTURNED',
+    actor_type: 'human',
+    actor_id: 'usr-admin',
+    agent_id: 'agent-finance-refund-04',
+    prev_hash: incidentEventHash,
+    timestamp: overturnTimestamp
+  });
+
   insertAudit.run(
     'evt-overturn-demo-001',
     3,
@@ -643,7 +677,7 @@ export function seedDatabase(db?: DatabaseSync): void {
     }),
     incidentEventHash,
     overturnedHash,
-    now - 1800000
+    overturnTimestamp
   );
 
   const insertBackup = targetDb.prepare(`

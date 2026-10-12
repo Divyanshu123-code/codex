@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { getDatabase } from '../db/connection.js';
 import { diagnoseIncident } from '../engine/diagnostics.js';
-import { generateIncidentReport } from '../engine/incidentReport.js';
+import { generateIncidentReport, incidentReportToMarkdown } from '../engine/incidentReport.js';
 
 export const incidentsRouter = Router();
 
@@ -61,5 +61,41 @@ incidentsRouter.post('/:id/diagnose', (req: Request, res: Response) => {
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }
+});
+
+// Helper for exporting After-Action Reports
+function handleIncidentExport(req: Request, res: Response, forcedFormat?: 'markdown' | 'json') {
+  try {
+    const format = forcedFormat || (req.query.format === 'json' ? 'json' : 'markdown');
+    const report = generateIncidentReport(req.params.id);
+
+    if (format === 'json') {
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="AAR-${req.params.id}.json"`);
+      return res.send(JSON.stringify(report, null, 2));
+    } else {
+      const md = incidentReportToMarkdown(report);
+      res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="AAR-${req.params.id}.md"`);
+      return res.send(md);
+    }
+  } catch (err: any) {
+    res.status(404).json({ error: err.message });
+  }
+}
+
+// GET /api/incidents/:id/export?format=markdown|json
+incidentsRouter.get('/:id/export', (req: Request, res: Response) => {
+  handleIncidentExport(req, res);
+});
+
+// GET /api/incidents/:id/export/markdown
+incidentsRouter.get('/:id/export/markdown', (req: Request, res: Response) => {
+  handleIncidentExport(req, res, 'markdown');
+});
+
+// GET /api/incidents/:id/export/json
+incidentsRouter.get('/:id/export/json', (req: Request, res: Response) => {
+  handleIncidentExport(req, res, 'json');
 });
 

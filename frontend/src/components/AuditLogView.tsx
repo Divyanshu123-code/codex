@@ -33,13 +33,59 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({ auditEvents }) => {
     setIsVerifying(true);
     setVerifyResult(null);
     try {
-      const res = await fetch('/api/audit/verify', { method: 'POST' });
+      const res = await fetch('/api/audit/verify');
       const data = await parseJsonSafe(res);
-      setVerifyResult(data || { verified: false, error: 'Empty verification response' });
+      setVerifyResult(data || { valid: false, error: 'Empty verification response' });
     } catch (err: any) {
-      setVerifyResult({ verified: false, error: err.message });
+      setVerifyResult({ valid: false, error: err.message });
     } finally {
       setIsVerifying(false);
+    }
+  };
+
+  const handleCorruptDemo = async () => {
+    setIsVerifying(true);
+    try {
+      await fetch('/api/audit/corrupt-demo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      // Re-verify to immediately show red tamper detection
+      const res = await fetch('/api/audit/verify');
+      const data = await parseJsonSafe(res);
+      setVerifyResult(data);
+    } catch (err: any) {
+      setVerifyResult({ valid: false, error: err.message });
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  const handleExport = async (format: 'json' | 'csv') => {
+    try {
+      const res = await fetch(`/api/audit/export?format=${format}`);
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `aegis_audit_ledger_${new Date().toISOString().substring(0, 10)}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to export audit log', err);
+    }
+  };
+
+  const handleResetLedger = async () => {
+    try {
+      await fetch('/api/demo/reset', { method: 'POST' });
+      await handleVerifyChain();
+      window.location.reload();
+    } catch (err) {
+      console.error('Failed to reset demo ledger', err);
     }
   };
 
@@ -53,23 +99,61 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({ auditEvents }) => {
     <div className="flex flex-col w-full space-y-6">
       
       {/* Page Title & Controls */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-            Audit Trail &amp; Cryptographic Provenance
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            <span>Audit Trail &amp; Cryptographic Provenance</span>
+            <span className="text-[0.625rem] font-mono px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-bold border border-slate-200">
+              SHA-256 Merkle Chain
+            </span>
           </h1>
           <p className="text-xs text-slate-500 mt-1 max-w-3xl">
             Tamper-evident, cryptographically chained governance audit trail. Every action proposal, gate verdict, and human decision is permanently recorded with SHA-256 hash chaining.
           </p>
         </div>
-        <button
-          onClick={handleVerifyChain}
-          disabled={isVerifying}
-          className="px-3.5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-colors flex items-center gap-1.5 shadow-sm self-start md:self-auto"
-        >
-          <span className="material-symbols-outlined text-[1rem]">lock_clock</span>
-          {isVerifying ? 'Verifying Chain...' : 'Verify Audit Hash Integrity'}
-        </button>
+
+        {/* Action Buttons Toolbar */}
+        <div className="flex flex-wrap items-center gap-2 self-start lg:self-auto">
+          <button
+            onClick={handleVerifyChain}
+            disabled={isVerifying}
+            className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-colors flex items-center gap-1.5 shadow-sm"
+            title="Verify SHA-256 sequence and hash linkages across all blocks"
+          >
+            <span className="material-symbols-outlined text-[1rem]">verified_user</span>
+            {isVerifying ? 'Verifying...' : 'Verify Hash Chain'}
+          </button>
+
+          <button
+            onClick={handleCorruptDemo}
+            disabled={isVerifying}
+            className="px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs transition-colors flex items-center gap-1.5 shadow-sm"
+            title="Simulate database tampering to demonstrate instant verification detection (Demo Only)"
+          >
+            <span className="material-symbols-outlined text-[1rem]">warning</span>
+            Simulate Tamper (Demo)
+          </button>
+
+          <div className="h-6 w-px bg-slate-300 mx-1 hidden sm:block" />
+
+          <button
+            onClick={() => handleExport('csv')}
+            className="px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-semibold text-xs transition-colors flex items-center gap-1"
+            title="Download audit log as CSV"
+          >
+            <span className="material-symbols-outlined text-[0.9375rem]">download</span>
+            CSV
+          </button>
+
+          <button
+            onClick={() => handleExport('json')}
+            className="px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-semibold text-xs transition-colors flex items-center gap-1"
+            title="Download audit log as JSON"
+          >
+            <span className="material-symbols-outlined text-[0.9375rem]">data_object</span>
+            JSON
+          </button>
+        </div>
       </div>
 
       {/* Summary Cards Row (4 Cards) */}
@@ -118,20 +202,45 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({ auditEvents }) => {
 
       {/* Verification Feedback Modal / Banner */}
       {verifyResult && (
-        <div className={`p-4 rounded-xl border text-xs font-mono ${
-          verifyResult.verified !== false 
-            ? 'bg-emerald-50 border-emerald-200 text-emerald-900' 
-            : 'bg-rose-50 border-rose-200 text-rose-900'
+        <div className={`p-4 rounded-xl border text-xs font-mono transition-all ${
+          verifyResult.valid !== false 
+            ? 'bg-emerald-50 border-emerald-300 text-emerald-900 shadow-sm' 
+            : 'bg-rose-50 border-rose-300 text-rose-900 shadow-md ring-2 ring-rose-300'
         }`}>
-          <div className="font-bold mb-1 flex items-center gap-1.5">
-            <span className="material-symbols-outlined text-[1.25rem]">
-              {verifyResult.verified !== false ? 'verified' : 'error'}
-            </span>
-            {verifyResult.verified !== false ? 'Cryptographic Audit Verification Passed' : 'Verification Mismatch Detected'}
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="font-bold flex items-center gap-2 text-sm">
+              <span className={`material-symbols-outlined text-[1.375rem] ${
+                verifyResult.valid !== false ? 'text-emerald-600' : 'text-rose-600 animate-pulse'
+              }`}>
+                {verifyResult.valid !== false ? 'verified' : 'gpp_bad'}
+              </span>
+              <span>
+                {verifyResult.valid !== false 
+                  ? 'Cryptographic Audit Verification Passed — Hash Chain Intact' 
+                  : 'TAMPER DETECTED — Cryptographic Chain Integrity Breached!'}
+              </span>
+            </div>
+
+            {verifyResult.valid === false && (
+              <button
+                onClick={handleResetLedger}
+                className="px-2.5 py-1 rounded bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs font-sans transition-colors"
+              >
+                Re-Seed Clean Ledger
+              </button>
+            )}
           </div>
-          <div>Verified Events: {verifyResult.count || totalCount} entries checked</div>
-          <div className="text-[0.6875rem] mt-1 text-slate-600">
-            Head Hash: {verifyResult.headHash || auditEvents[0]?.event_hash || 'Computed'}
+
+          <div className="mt-2 text-xs space-y-1">
+            <div><strong>Status:</strong> {verifyResult.message}</div>
+            <div><strong>Total Events Audited:</strong> {verifyResult.totalEvents || totalCount} entries verified</div>
+            {verifyResult.valid === false && (
+              <div className="text-rose-800 bg-rose-100/70 p-2.5 rounded border border-rose-200 mt-2">
+                <div><strong>Broken Event Sequence:</strong> #{verifyResult.brokenIndex !== undefined ? verifyResult.brokenIndex + 1 : 'N/A'} (Index: {verifyResult.brokenIndex})</div>
+                <div><strong>Corrupted Event ID:</strong> <span className="font-bold text-rose-950">{verifyResult.brokenEventId || 'Unknown'}</span></div>
+                <div><strong>Violation Diagnostics:</strong> {verifyResult.error}</div>
+              </div>
+            )}
           </div>
         </div>
       )}

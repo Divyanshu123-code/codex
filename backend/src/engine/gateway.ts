@@ -12,6 +12,7 @@ import {
   executeProtectedTool,
   generateExecutionToken
 } from '../tools/protectedTools.js';
+import { computeAuditEventHash } from './auditLedger.js';
 
 export interface RouteActionResult {
   requestId: string;
@@ -125,18 +126,16 @@ export function writeAuditEvent(
   const eventId = `evt-${Date.now()}-${sequence}`;
   const now = Date.now();
 
-  const hashPayload = JSON.stringify({
-    eventId,
+  const hash = computeAuditEventHash({
+    id: eventId,
     sequence,
-    eventType: event.eventType,
-    actorType: event.actorType,
-    actorId: event.actorId,
-    agentId: event.agentId,
-    prevHash,
+    event_type: event.eventType,
+    actor_type: event.actorType,
+    actor_id: event.actorId,
+    agent_id: event.agentId || null,
+    prev_hash: prevHash,
     timestamp: now
   });
-
-  const hash = crypto.createHash('sha256').update(hashPayload).digest('hex');
 
   targetDb.prepare(`
     INSERT INTO audit_events (

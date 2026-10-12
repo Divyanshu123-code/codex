@@ -65,6 +65,23 @@ export const IncidentsView: React.FC<IncidentsViewProps> = ({
     }
   };
 
+  const handleExportAar = async (incidentId: string, format: 'markdown' | 'json') => {
+    try {
+      const res = await fetch(`/api/incidents/${incidentId}/export?format=${format}`);
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `AAR-${incidentId}.${format === 'markdown' ? 'md' : 'json'}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to export AAR', err);
+    }
+  };
+
   return (
     <div className="flex flex-col w-full space-y-6">
       
@@ -257,7 +274,25 @@ export const IncidentsView: React.FC<IncidentsViewProps> = ({
                   className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs border border-slate-300 transition-colors flex items-center gap-1.5"
                 >
                   <span className="material-symbols-outlined text-[1rem]">description</span>
-                  {isReportLoading ? 'Generating...' : 'View 11-Section Incident Report'}
+                  {isReportLoading ? 'Generating...' : 'View 12-Section AAR'}
+                </button>
+
+                <button
+                  onClick={() => handleExportAar(selectedIncident.id, 'markdown')}
+                  className="px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs border border-slate-300 transition-colors flex items-center gap-1"
+                  title="Download NATO/Defence 12-Section After-Action Report as Markdown"
+                >
+                  <span className="material-symbols-outlined text-[0.9375rem]">download</span>
+                  AAR (MD)
+                </button>
+
+                <button
+                  onClick={() => handleExportAar(selectedIncident.id, 'json')}
+                  className="px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs border border-slate-300 transition-colors flex items-center gap-1"
+                  title="Download After-Action Report as JSON"
+                >
+                  <span className="material-symbols-outlined text-[0.9375rem]">data_object</span>
+                  AAR (JSON)
                 </button>
 
                 <button

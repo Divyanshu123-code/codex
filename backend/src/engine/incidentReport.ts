@@ -246,3 +246,119 @@ export function generateIncidentReport(
 }
 
 export const generateAfterActionReport = generateIncidentReport;
+
+export function incidentReportToMarkdown(report: AuditReadyIncidentReport): string {
+  const meta = report.reportMetadata;
+  const s1 = report.section1_incidentIdentification;
+  const s2 = report.section2_agentAndOwnership;
+  const s3 = report.section3_taskAndTriggeringAction;
+  const s4 = report.section4_policyEvaluationGate;
+  const s5 = report.section5_humanAuthorizationReview;
+  const s6 = report.section6_executionOutcome;
+  const s7 = report.section7_containmentAction;
+  const s8 = report.section8_automatedDiagnostics;
+  const s9 = report.section9_correctionProposalAndVerification;
+  const s10 = report.section10_revalidationAndResumeDecision;
+  const s11 = report.section11_chronologicalAuditTimeline || [];
+  const s12 = report.section12_lessonsIdentified;
+
+  return `# AFTER-ACTION REPORT (AAR) & INCIDENT ACCOUNTABILITY RECORD
+**Classification**: ${meta.classification || 'OFFICIAL-SENSITIVE//EXERCISE'}  
+**Generated At**: ${meta.generatedAt}  
+**Report Version**: ${meta.reportVersion}  
+**Doctrinal Standard**: UK JSP 936 / US DoD Directive 3000.09 / NATO STANAG 2014
+
+> [!NOTE]
+> ${meta.disclaimer}
+
+---
+
+## 1. Incident Identification
+- **Incident ID**: \`${s1.incidentId}\`
+- **Severity**: **${s1.severity}**
+- **Status**: **${s1.status}**
+- **Opened At**: ${s1.openedAt}
+- **Diagnosed At**: ${s1.diagnosedAt}
+- **Correction Applied At**: ${s1.appliedAt}
+- **Resumed At**: ${s1.resumedAt}
+
+## 2. Agent Identity & Command Responsibility
+- **Agent ID**: \`${s2.agentId}\` (${s2.agentName})
+- **Classification / Category**: ${s2.agentCategory || 'Autonomous Task Agent'}
+- **Command Owner (At Event)**: \`${s2.ownerUserIdAtEvent}\`
+- **Assigned Unit / Team**: ${s2.team}
+- **Risk Category**: ${s2.riskCategory}
+
+## 3. Mission Task & Triggering Operation
+- **Triggering Request ID**: \`${s3.triggeringRequestId}\`
+- **Task Type**: ${s3.taskType}
+- **Handler**: ${s3.handler}
+- **Requested Operation**: \`${s3.requestedOperation}\`
+- **Resource Reference**: \`${s3.resourceReference}\`
+- **Timestamp**: ${s3.receivedAt}
+
+## 4. Policy Evaluation Gate
+- **Enforcing Policy**: \`${s4.policyId}\` (v${s4.policyVersion})
+- **Deterministic Gate Decision**: **${s4.gateDecision}**
+- **Reason Code**: \`${s4.reasonCode}\`
+- **Doctrinal Explanation**: ${s4.explanation}
+
+## 5. Human Authorization Review (Separation of Duties)
+- **Approval Required**: ${s5.approvalRequired ? 'YES' : 'NO'}
+- **Approval ID**: \`${s5.approvalId}\`
+- **Status**: ${s5.status}
+- **Approving Authority**: \`${s5.approverId}\` (${s5.approverRole})
+- **Authority Level**: Level ${s5.approverAuthorityLevel}
+- **Administrative Overturn**: ${s5.overturned ? 'YES' : 'NO'}
+- **Justification**: ${s5.reason}
+- **Decided At**: ${s5.decidedAt}
+
+## 6. Execution Outcome
+- **Execution Status**: **${s6.status}**
+- **Non-Execution Reason**: ${s6.nonExecutionReason}
+- **Execution Latency**: ${s6.durationMs} ms
+- **Executed At**: ${s6.executedAt}
+
+## 7. Containment & Interlock Action
+- **Containment Violation Type**: \`${s7.violationType}\`
+- **Pre-Incident Agent Status**: ${s7.preIncidentAgentStatus}
+- **Post-Incident Agent Status**: **${s7.postIncidentAgentStatus}**
+- **Interlock Engaged**: ${s7.containmentEnforced ? 'CONFIRMED (Zero Side Effects)' : 'NO'}
+
+## 8. Root-Cause Diagnostic Telemetry
+- **Diagnostic Status**: ${s8.diagnosticStatus}
+- **Signature ID**: \`${s8.signatureId}\`
+- **Cause Category**: ${s8.causeCategory}
+- **Technical Analysis**: ${s8.explanation}
+
+## 9. Correction Proposal & Dual-Key Verification
+- **Correction ID**: \`${s9.correctionId}\`
+- **Patch Hash**: \`${s9.patchHash}\`
+- **Policy Hash**: \`${s9.policyHash}\`
+- **Structural Integrity Verdict**: ${s9.structuralVerdict}
+- **Behavioral Simulation Verdict**: ${s9.behaviouralVerdict}
+- **Overall Verdict**: **${s9.overallVerdict}**
+- **Reviewer / Authority**: \`${s9.approverId}\`
+- **Application Status**: ${s9.applicationStatus}
+
+## 10. Revalidation & Resumption Decision
+- **Revalidation Passed**: ${s10.revalidationPassed ? 'YES' : 'NO'}
+- **Eligible for Return to Service**: ${s10.resumeEligible ? 'YES' : 'NO'}
+- **Pending Conditions**: ${s10.unmetConditions.length > 0 ? s10.unmetConditions.join(', ') : 'None'}
+- **Resumed State**: ${s10.resumedToStatus}
+
+## 11. Cryptographic Audit Chain Timeline
+| Sequence | Event ID | Event Type | Actor | Decision | SHA-256 Hash |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+${s11.map((e: any) => `| #${e.sequence} | \`${e.id}\` | \`${e.event_type}\` | \`${e.actor_id}\` | ${e.decision || 'N/A'} | \`${e.hash ? e.hash.substring(0, 16) + '...' : 'N/A'}\` |`).join('\n')}
+
+## 12. Lessons Identified & Doctrinal Recommendations
+### Deterministic Findings:
+${s12?.deterministicFindings ? s12.deterministicFindings.map((f: string) => `- ${f}`).join('\n') : '- N/A'}
+
+### Recommended Doctrinal Adjustments:
+${s12?.recommendedDoctrinalAdjustments ? s12.recommendedDoctrinalAdjustments.map((a: string) => `- ${a}`).join('\n') : '- N/A'}
+
+- **Latest Verified Audit Chain Hash**: \`${s12?.latestAuditHash || 'N/A'}\`
+`;
+}
