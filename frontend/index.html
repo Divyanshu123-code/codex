@@ -4,7 +4,128 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>frontend</title>
+    <title>AegisOS — Defence AI Governance Control Plane</title>
+    
+    <!-- Google Fonts & Material Symbols -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+    
+    <!-- Tailwind CSS with Stitch Design Tokens -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "outline": "#777587",
+              "tertiary-fixed": "#ffdbcc",
+              "error-container": "#ffdad6",
+              "primary-fixed": "#e2dfff",
+              "secondary-fixed": "#d9e3fb",
+              "on-primary-container": "#dad7ff",
+              "on-primary-fixed": "#0f0069",
+              "on-secondary-fixed": "#111c2d",
+              "on-primary-fixed-variant": "#3323cc",
+              "tertiary-fixed-dim": "#ffb695",
+              "tertiary": "#7e3000",
+              "surface-container": "#efedf1",
+              "tertiary-container": "#a44100",
+              "on-primary": "#ffffff",
+              "on-tertiary-fixed": "#351000",
+              "outline-variant": "#c7c4d8",
+              "secondary-container": "#d6e0f8",
+              "primary": "#3525cd",
+              "error": "#ba1a1a",
+              "on-error": "#ffffff",
+              "primary-fixed-dim": "#c3c0ff",
+              "on-secondary-fixed-variant": "#3d475a",
+              "surface-container-lowest": "#ffffff",
+              "surface-variant": "#e3e2e6",
+              "primary-container": "#4f46e5",
+              "surface-bright": "#faf9fd",
+              "secondary-fixed-dim": "#bdc7de",
+              "surface-container-high": "#e9e7eb",
+              "on-tertiary-container": "#ffd2be",
+              "secondary": "#555f73",
+              "inverse-primary": "#c3c0ff",
+              "on-surface-variant": "#464555",
+              "on-error-container": "#93000a",
+              "surface-dim": "#dbd9dd",
+              "on-background": "#1a1b1e",
+              "on-tertiary-fixed-variant": "#7b2f00",
+              "on-secondary": "#ffffff",
+              "inverse-on-surface": "#f1f0f4",
+              "on-surface": "#1a1b1e",
+              "surface-tint": "#4d44e3",
+              "on-secondary-container": "#596377",
+              "surface": "#faf9fd",
+              "surface-container-highest": "#e3e2e6",
+              "on-tertiary": "#ffffff",
+              "inverse-surface": "#2f3033",
+              "background": "#faf9fd",
+              "surface-container-low": "#f4f3f7"
+            },
+            borderRadius: {
+              "DEFAULT": "0.125rem",
+              "lg": "0.25rem",
+              "xl": "0.5rem",
+              "full": "0.75rem"
+            },
+            spacing: {
+              "space-2xl": "2rem",
+              "gutter": "1rem",
+              "margin": "1rem",
+              "space-sm": "0.5rem",
+              "space-md": "0.75rem",
+              "space-lg": "1rem",
+              "space-xs": "0.25rem",
+              "space-xl": "1.5rem",
+              "gutter-lg": "1.5rem",
+              "margin-lg": "2rem"
+            },
+            fontFamily: {
+              sans: ["Inter", "sans-serif"],
+              mono: ["JetBrains Mono", "monospace"],
+              "code-sm": ["JetBrains Mono"],
+              "label-sm": ["Inter"],
+              "body-md": ["Inter"],
+              "body-lg": ["Inter"],
+              "body-sm": ["Inter"],
+              "headline-xl": ["Inter"],
+              "label-md": ["Inter"],
+              "headline-sm": ["Inter"],
+              "headline-lg": ["Inter"]
+            }
+          }
+        }
+      };
+    </script>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: 'Inter', sans-serif;
+        background-color: #faf9fd;
+        color: #1a1b1e;
+      }
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #f4f3f7;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #c7c4d8;
+        border-radius: 3px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #777587;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

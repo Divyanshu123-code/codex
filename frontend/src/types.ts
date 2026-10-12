@@ -1,0 +1,182 @@
+export type Tab = 
+  | 'overview' 
+  | 'agents' 
+  | 'policies' 
+  | 'approvals' 
+  | 'incidents' 
+  | 'corrections' 
+  | 'tasks' 
+  | 'audit';
+
+export interface Agent {
+  id: string;
+  name: string;
+  agent_category?: string;
+  api_key?: string;
+  owner_user_id?: string;
+  team?: string;
+  owner_team?: string;
+  purpose?: string;
+  risk_category?: string;
+  risk_level?: string;
+  allowed_operations: string[];
+  allowed_resources: string[];
+  status: 'active' | 'restricted' | 'paused';
+  policy_version?: string;
+  input_requirements?: Record<string, any>;
+  uncertainty_rule?: Record<string, any>;
+  workflow_config?: Array<{
+    step_id: string;
+    operation: string;
+    resource: string;
+    params?: Record<string, any>;
+  }>;
+  demo_data_only?: number | boolean;
+}
+
+export interface Policy {
+  id: string;
+  version: string;
+  name: string;
+  applicable_agent_id?: string;
+  operation: string;
+  resource_pattern: string;
+  decision: 'allow' | 'require_approval' | 'block';
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  pause_on_violation: number | boolean;
+  open_incident: number | boolean;
+  created_at: number;
+}
+
+export interface Approval {
+  id: string;
+  request_id: string;
+  approver_id?: string | null;
+  approver_role?: string | null;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  reason?: string | null;
+  requested_at: number;
+  decided_at?: number | null;
+  sla_deadline?: number | null;
+  agent_id: string;
+  agent_category?: string;
+  tool: string;
+  operation: string;
+  resource: string;
+  parameters: string | Record<string, any>;
+  gate_decision: 'ALLOW' | 'REQUIRE_APPROVAL' | 'BLOCK';
+  gate_reason_code?: string;
+  evidence_checks?: string | Record<string, any>;
+  request_explanation?: string;
+  execution_status?: string;
+  non_execution_reason?: string;
+}
+
+export interface Incident {
+  id: string;
+  agent_id: string;
+  policy_id: string;
+  action_attempted: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  status: 'OPEN' | 'CONTAINED' | 'RESOLVED' | 'CLOSED';
+  containment_action: string;
+  occurred_at: number;
+  resolved_at?: number | null;
+  agent_category?: string;
+  evidence_checks?: string | Record<string, any>;
+}
+
+export interface Correction {
+  id: string;
+  incident_id: string;
+  agent_id: string;
+  proposed_patch: string | Record<string, any>;
+  status: 'PENDING' | 'SANDBOX_VERIFIED' | 'APPROVED' | 'APPLIED' | 'REJECTED';
+  created_at: number;
+  reviewed_at?: number | null;
+  reviewer_id?: string | null;
+  verification_results?: string | Record<string, any>;
+}
+
+export interface Task {
+  id: string;
+  type_id: string;
+  title: string;
+  description?: string;
+  assigned_agent_id?: string;
+  status: 'SUBMITTED' | 'QUEUED' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' | 'ESCALATED' | 'BLOCKED';
+  priority?: 'P1' | 'P2' | 'P3' | 'P4';
+  created_at: number;
+  updated_at?: number;
+  result?: string | Record<string, any>;
+}
+
+export interface AuditEvent {
+  id: string;
+  sequence: number;
+  timestamp: number;
+  event_type: string;
+  actor_id: string;
+  actor_role: string;
+  action: string;
+  resource: string;
+  decision?: string;
+  reason?: string;
+  previous_hash: string;
+  event_hash: string;
+  metadata?: string | Record<string, any>;
+}
+
+export interface DashboardData {
+  timeWindow: {
+    from: string;
+    to: string;
+  };
+  risk: {
+    totalAgents: number;
+    activeAgents: number;
+    restrictedAgents: number;
+    pausedAgents: number;
+    agentsByCategory?: Record<string, number>;
+    totalViolations: number;
+    openIncidents: {
+      total: number;
+      bySeverity: {
+        critical: number;
+        high: number;
+        medium: number;
+        low: number;
+      };
+    };
+    meanTimeToContainMs: number;
+    meanTimeToRecoverMs: number;
+  };
+  usage: {
+    tasksReceived: number;
+    tasksByHandler: Record<string, number>;
+    requestsByOperation: Record<string, number>;
+    requestsByCategory?: Record<string, number>;
+    executionOutcomes: {
+      succeeded: number;
+      failed: number;
+      notExecuted: number;
+    };
+  };
+  humanIntervention: {
+    approvals: {
+      pending: number;
+      approved: number;
+      rejected: number;
+    };
+    escalatedTasksCount: number;
+    pauseEventsCount: number;
+    recoveryAttemptsCount: number;
+  };
+  costAndValueEstimates?: {
+    disclaimer: string;
+    assumptions: Record<string, any>;
+    estimatedOperatingCostUsd: number;
+    estimatedLaborValueCreatedUsd: number;
+    netSyntheticValueUsd: number;
+  };
+}
