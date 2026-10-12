@@ -30,10 +30,13 @@ actionsRouter.post('/evaluate', (req: Request, res: Response) => {
     const agent: AgentRecord | null = agentRow ? {
       id: agentRow.id,
       name: agentRow.name,
+      agent_category: agentRow.agent_category || 'document_analysis',
       status: agentRow.status,
       allowed_operations: JSON.parse(agentRow.allowed_operations),
       allowed_resources: JSON.parse(agentRow.allowed_resources),
-      policy_version: agentRow.policy_version
+      policy_version: agentRow.policy_version,
+      input_requirements: agentRow.input_requirements ? JSON.parse(agentRow.input_requirements) : {},
+      uncertainty_rule: agentRow.uncertainty_rule ? JSON.parse(agentRow.uncertainty_rule) : {}
     } : null;
 
     // 2. Fetch Policies

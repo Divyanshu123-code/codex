@@ -22,6 +22,7 @@ export interface RouteActionResult {
   executionStatus: 'NOT_STARTED' | 'EXECUTING' | 'SUCCEEDED' | 'FAILED' | 'NOT_EXECUTED';
   nonExecutionReason?: string;
   incidentId?: string;
+  evidenceChecks?: any;
   result?: any;
 }
 
@@ -167,10 +168,13 @@ export function routeAction(
   const agent: AgentRecord | null = agentRow ? {
     id: agentRow.id,
     name: agentRow.name,
+    agent_category: agentRow.agent_category || 'document_analysis',
     status: agentRow.status,
     allowed_operations: JSON.parse(agentRow.allowed_operations),
     allowed_resources: JSON.parse(agentRow.allowed_resources),
-    policy_version: agentRow.policy_version
+    policy_version: agentRow.policy_version,
+    input_requirements: agentRow.input_requirements ? JSON.parse(agentRow.input_requirements) : {},
+    uncertainty_rule: agentRow.uncertainty_rule ? JSON.parse(agentRow.uncertainty_rule) : {}
   } : null;
 
   // 2. Fetch Policies
@@ -206,19 +210,21 @@ export function routeAction(
   // 5. Insert action_requests row (State: PROPOSED -> Evaluated)
   targetDb.prepare(`
     INSERT INTO action_requests (
-      id, agent_id, tool, operation, resource, parameters,
+      id, agent_id, agent_category, tool, operation, resource, parameters, evidence_checks,
       task_type, handler, handler_reason, resource_sensitivity, correlation_id,
       gate_decision, gate_reason_code, policy_id, policy_version, explanation,
       received_at, gated_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     requestId,
     action.agent_id,
+    agent ? agent.agent_category || 'document_analysis' : 'unknown',
     action.tool,
     action.operation,
     action.resource,
     JSON.stringify(action.parameters || {}),
+    evaluation.evidenceChecks ? JSON.stringify(evaluation.evidenceChecks) : null,
     'document_analysis',
     evaluation.decision === 'ALLOW' ? 'agent' : evaluation.decision === 'REQUIRE_APPROVAL' ? 'human' : 'blocked',
     evaluation.reasonCode,
@@ -320,6 +326,7 @@ export function routeAction(
         gateReasonCode: evaluation.reasonCode,
         explanation: evaluation.explanation,
         executionStatus: 'SUCCEEDED',
+        evidenceChecks: evaluation.evidenceChecks,
         result: toolOutput.result
       };
     } catch (toolErr: any) {
@@ -352,6 +359,7 @@ export function routeAction(
         gateReasonCode: evaluation.reasonCode,
         explanation: evaluation.explanation,
         executionStatus: 'FAILED',
+        evidenceChecks: evaluation.evidenceChecks,
         nonExecutionReason: toolErr.message
       };
     }
@@ -402,6 +410,7 @@ export function routeAction(
       explanation: evaluation.explanation,
       approvalStatus: 'PENDING',
       executionStatus: 'NOT_EXECUTED',
+      evidenceChecks: evaluation.evidenceChecks,
       nonExecutionReason: 'APPROVAL_PENDING'
     };
   }
@@ -418,19 +427,21 @@ export function routeAction(
     incidentId = `inc-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     targetDb.prepare(`
       INSERT INTO incidents (
-        id, agent_id, triggering_request_id, severity, policy_id, policy_version,
-        status, pre_incident_status, evidence_summary, opened_at, agent_owner_at_time
+        id, agent_id, agent_category, triggering_request_id, severity, policy_id, policy_version,
+        status, pre_incident_status, evidence_summary, evidence_checks, opened_at, agent_owner_at_time
       )
-      VALUES (?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?, ?, ?)
     `).run(
       incidentId,
       agent.id,
+      agent.agent_category || 'document_analysis',
       requestId,
       evaluation.severity,
       evaluation.policyId || 'UNKNOWN_POLICY',
       evaluation.policyVersion || 'v1.0',
       agent.status,
       `Violation occurred during attempt to execute operation '${action.operation}' on '${action.resource}': ${evaluation.explanation}`,
+      evaluation.evidenceChecks ? JSON.stringify(evaluation.evidenceChecks) : null,
       now,
       agentRow ? agentRow.owner_user_id : 'unknown'
     );
@@ -465,6 +476,7 @@ export function routeAction(
     explanation: evaluation.explanation,
     executionStatus: 'NOT_EXECUTED',
     nonExecutionReason: 'BLOCKED_BY_POLICY',
+    evidenceChecks: evaluation.evidenceChecks,
     incidentId: incidentId || undefined
   };
 }

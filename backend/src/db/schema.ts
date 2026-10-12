@@ -55,20 +55,26 @@ export function initializeSchema(db: DatabaseSync): void {
       completed_at INTEGER
     );
 
-    -- Agents table (FR-1 & Section 3.4 status model)
+    -- Agents table (FR-1, Section 3.4 & Defence Domain Adaptation)
     CREATE TABLE IF NOT EXISTS agents (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
+      agent_category TEXT NOT NULL DEFAULT 'document_analysis',
       api_key TEXT UNIQUE NOT NULL,
       owner_user_id TEXT NOT NULL,
       team TEXT NOT NULL,
+      owner_team TEXT,
       purpose TEXT NOT NULL,
       risk_category TEXT NOT NULL CHECK(risk_category IN ('low', 'medium', 'high', 'critical')),
+      risk_level TEXT,
       allowed_operations TEXT NOT NULL, -- JSON array
       allowed_resources TEXT NOT NULL,  -- JSON array
       status TEXT NOT NULL CHECK(status IN ('active', 'restricted', 'paused')),
       policy_version TEXT NOT NULL,
       workflow_config TEXT NOT NULL,     -- JSON array of workflow steps
+      input_requirements TEXT NOT NULL DEFAULT '{}', -- JSON validation profile
+      uncertainty_rule TEXT NOT NULL DEFAULT '{}',   -- JSON uncertainty rule
+      demo_data_only INTEGER NOT NULL DEFAULT 1,      -- 1 for synthetic demo data
       cost_per_operation REAL NOT NULL DEFAULT 0.0,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
@@ -90,14 +96,16 @@ export function initializeSchema(db: DatabaseSync): void {
       PRIMARY KEY (id, version)
     );
 
-    -- Action Requests table (FR-3, FR-5 & Section 3.2, 3.6)
+    -- Action Requests table (FR-3, FR-5, Section 3.2, 3.6 & Defence Quality Evidence)
     CREATE TABLE IF NOT EXISTS action_requests (
       id TEXT PRIMARY KEY,
       agent_id TEXT NOT NULL,
+      agent_category TEXT,
       tool TEXT NOT NULL,
       operation TEXT NOT NULL,
       resource TEXT NOT NULL,
       parameters TEXT NOT NULL,           -- JSON
+      evidence_checks TEXT,               -- JSON quality/uncertainty/conflict evidence
       task_type TEXT,
       handler TEXT CHECK(handler IN ('agent', 'human', 'escalated', 'blocked')),
       handler_reason TEXT,
@@ -145,10 +153,11 @@ export function initializeSchema(db: DatabaseSync): void {
       executed_at INTEGER
     );
 
-    -- Incidents table (FR-6, Section 3.5, 3.6)
+    -- Incidents table (FR-6, Section 3.5, 3.6 & Defence Evidence)
     CREATE TABLE IF NOT EXISTS incidents (
       id TEXT PRIMARY KEY,
       agent_id TEXT NOT NULL,
+      agent_category TEXT,
       triggering_request_id TEXT NOT NULL,
       severity TEXT NOT NULL CHECK(severity IN ('low', 'medium', 'high', 'critical')),
       policy_id TEXT NOT NULL,
@@ -156,6 +165,7 @@ export function initializeSchema(db: DatabaseSync): void {
       status TEXT NOT NULL CHECK(status IN ('OPEN', 'DIAGNOSED', 'RESOLVED')),
       pre_incident_status TEXT NOT NULL,
       evidence_summary TEXT NOT NULL,
+      evidence_checks TEXT,               -- JSON
       signature_id TEXT,
       diagnostic_result TEXT,             -- JSON
       opened_at INTEGER NOT NULL,
@@ -220,4 +230,26 @@ export function initializeSchema(db: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS idx_approvals_status ON approvals(status);
     CREATE INDEX IF NOT EXISTS idx_tasks_handler ON tasks(handler);
   `);
+
+  // Safe incremental migration for existing databases on disk
+  const migrations = [
+    `ALTER TABLE agents ADD COLUMN agent_category TEXT NOT NULL DEFAULT 'document_analysis'`,
+    `ALTER TABLE agents ADD COLUMN owner_team TEXT`,
+    `ALTER TABLE agents ADD COLUMN risk_level TEXT`,
+    `ALTER TABLE agents ADD COLUMN input_requirements TEXT NOT NULL DEFAULT '{}'`,
+    `ALTER TABLE agents ADD COLUMN uncertainty_rule TEXT NOT NULL DEFAULT '{}'`,
+    `ALTER TABLE agents ADD COLUMN demo_data_only INTEGER NOT NULL DEFAULT 1`,
+    `ALTER TABLE action_requests ADD COLUMN agent_category TEXT`,
+    `ALTER TABLE action_requests ADD COLUMN evidence_checks TEXT`,
+    `ALTER TABLE incidents ADD COLUMN agent_category TEXT`,
+    `ALTER TABLE incidents ADD COLUMN evidence_checks TEXT`
+  ];
+
+  for (const sql of migrations) {
+    try {
+      db.exec(sql);
+    } catch {
+      // Column already exists - ignore
+    }
+  }
 }

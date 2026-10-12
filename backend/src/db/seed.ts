@@ -47,6 +47,15 @@ export function seedDatabase(db?: DatabaseSync): void {
   insertOp.run('archive_file', 'Move document to long-term synthetic archive storage', 1, 0, 0.02);
   insertOp.run('export_dataset', 'Export processed synthetic documents to external share', 0, 1, 0.20);
   insertOp.run('delete_file', 'Permanently purge a synthetic document', 1, 1, 0.10);
+  insertOp.run('read_telemetry', 'Read equipment sensor readings (vibration, temperature, pressure)', 0, 0, 0.01);
+  insertOp.run('create_maintenance_ticket', 'Generate scheduled maintenance ticket for equipment', 1, 0, 0.04);
+  insertOp.run('read_security_logs', 'Read boundary enclave network flow and anomaly logs', 0, 0, 0.01);
+  insertOp.run('isolate_host', 'Quarantine and isolate target host within enclave', 1, 1, 0.15);
+  insertOp.run('block_ip', 'Inject drop rule into perimeter firewall', 1, 0, 0.03);
+  insertOp.run('read_recon_report', 'Read reconnaissance intelligence reports', 0, 0, 0.01);
+  insertOp.run('propose_tactical_recommendation', 'Formulate tactical recommendation for human commander review', 0, 1, 0.08);
+  insertOp.run('wipe_credentials', 'Prohibited destruction of authentication credentials', 1, 1, 0.50);
+  insertOp.run('purge_security_logs', 'Prohibited deletion of boundary security event logs', 1, 1, 0.50);
 
   // 3. Seed Task Types
   const insertTaskType = targetDb.prepare(`
@@ -144,6 +153,45 @@ export function seedDatabase(db?: DatabaseSync): void {
     20.0,
     35.0
   );
+  insertTaskType.run(
+    'predictive_maintenance',
+    'predictive_maintenance',
+    'Predictive Equipment Telemetry Monitoring',
+    'Ingestion and health assessment of synthetic turbine and power unit telemetry',
+    'agent',
+    'medium',
+    JSON.stringify(['read_telemetry', 'create_maintenance_ticket']),
+    0,
+    'reviewer',
+    20.0,
+    35.0
+  );
+  insertTaskType.run(
+    'cybersecurity_containment',
+    'cybersecurity_containment',
+    'Boundary Enclave Intrusion Containment',
+    'Analysis of boundary network anomalies and isolation of compromised assets',
+    'approval_required',
+    'high',
+    JSON.stringify(['read_security_logs', 'isolate_host', 'block_ip']),
+    1,
+    'admin',
+    35.0,
+    60.0
+  );
+  insertTaskType.run(
+    'tactical_decision_support',
+    'tactical_decision_support',
+    'Multi-Source Reconnaissance Synthesis',
+    'Correlation of multi-sensor reconnaissance data for human commander recommendation',
+    'approval_required',
+    'high',
+    JSON.stringify(['read_recon_report', 'propose_tactical_recommendation']),
+    1,
+    'reviewer',
+    40.0,
+    70.0
+  );
 
   // 4. Seed Policies
   const insertPolicy = targetDb.prepare(`
@@ -155,6 +203,17 @@ export function seedDatabase(db?: DatabaseSync): void {
   insertPolicy.run('POL-DOC-ARCHIVE', 'v1.0', 'Allow Document Archival', 'doc-agent-01', 'archive_file', 'synthetic://archive/*', 'allow', 'low', 0, 0, now);
   insertPolicy.run('POL-DOC-EXPORT', 'v1.0', 'Require Approval for External Export', 'doc-agent-01', 'export_dataset', 'synthetic://documents/*', 'require_approval', 'medium', 0, 0, now);
   insertPolicy.run('POL-DOC-DELETE', 'v1.0', 'Strictly Prohibit File Deletion', null, 'delete_file', '*', 'block', 'high', 1, 1, now);
+  
+  // Defence Domain Policies
+  insertPolicy.run('POL-MAINT-READ', 'v1.0', 'Allow Telemetry Reading', 'agent-pred-maint-01', 'read_telemetry', 'synthetic://telemetry/*', 'allow', 'low', 0, 0, now);
+  insertPolicy.run('POL-MAINT-TICKET', 'v1.0', 'Allow Scheduled Maintenance Advisories', 'agent-pred-maint-01', 'create_maintenance_ticket', 'synthetic://maintenance/*', 'allow', 'medium', 0, 0, now);
+  insertPolicy.run('POL-CYBER-READ', 'v1.0', 'Allow Network Log Ingestion', 'agent-cyber-monitor-02', 'read_security_logs', 'synthetic://network-logs/*', 'allow', 'low', 0, 0, now);
+  insertPolicy.run('POL-CYBER-ISOLATE', 'v1.0', 'Require Human Approval for Host Isolation', 'agent-cyber-monitor-02', 'isolate_host', 'synthetic://enclaves/*', 'require_approval', 'high', 0, 0, now);
+  insertPolicy.run('POL-CYBER-BLOCK-IP', 'v1.0', 'Allow Bounded Perimeter Firewall IP Drops', 'agent-cyber-monitor-02', 'block_ip', 'synthetic://enclaves/*', 'allow', 'medium', 0, 0, now);
+  insertPolicy.run('POL-CYBER-PROHIBIT-WIPE', 'v1.0', 'Strictly Prohibit Credential Destruction', null, 'wipe_credentials', '*', 'block', 'critical', 1, 1, now);
+  insertPolicy.run('POL-CYBER-PROHIBIT-PURGE', 'v1.0', 'Strictly Prohibit Security Log Purge', null, 'purge_security_logs', '*', 'block', 'critical', 1, 1, now);
+  insertPolicy.run('POL-RECON-READ', 'v1.0', 'Allow Reconnaissance Report Reads', 'agent-decision-support-03', 'read_recon_report', 'synthetic://recon/*', 'allow', 'low', 0, 0, now);
+  insertPolicy.run('POL-RECON-RECOMMEND', 'v1.0', 'Require Commander Approval for Tactical Recommendations', 'agent-decision-support-03', 'propose_tactical_recommendation', 'synthetic://briefings/*', 'require_approval', 'high', 0, 0, now);
 
   // 5. Seed Agents
   const faultyWorkflow = [
@@ -164,23 +223,35 @@ export function seedDatabase(db?: DatabaseSync): void {
   ];
 
   const insertAgent = targetDb.prepare(`
-    INSERT INTO agents (id, name, api_key, owner_user_id, team, purpose, risk_category, allowed_operations, allowed_resources, status, policy_version, workflow_config, cost_per_operation, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO agents (
+      id, name, agent_category, api_key, owner_user_id, team, owner_team, purpose,
+      risk_category, risk_level, allowed_operations, allowed_resources, status,
+      policy_version, workflow_config, input_requirements, uncertainty_rule, demo_data_only,
+      cost_per_operation, created_at, updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
+  // Baseline Demo Agent (Maintained for backward compatibility and rehearsal)
   insertAgent.run(
     'doc-agent-01',
     'Defense Intel Document Parser',
+    'document_analysis',
     'agnt_live_doc_agent_key_01',
     'usr-admin',
     'Intel Governance Taskforce',
+    'Intel Governance Taskforce',
     'Autonomous ingestion, analysis, and briefing preparation of synthetic intelligence documents',
+    'low',
     'low',
     JSON.stringify(['read_file', 'write_summary', 'archive_file', 'export_dataset']),
     JSON.stringify(['synthetic://documents/*', 'synthetic://reports/*', 'synthetic://archive/*']),
     'active',
     'v1.0',
     JSON.stringify(faultyWorkflow),
+    '{}',
+    '{}',
+    1,
     0.05,
     now,
     now
@@ -189,16 +260,22 @@ export function seedDatabase(db?: DatabaseSync): void {
   insertAgent.run(
     'data-exporter-99',
     'Bulk Intelligence Exporter',
+    'document_analysis',
     'agnt_live_exporter_key_99',
     'usr-researcher',
     'Joint Analysis Division',
+    'Joint Analysis Division',
     'Packaging and transmission of cleared intelligence briefs',
+    'medium',
     'medium',
     JSON.stringify(['read_file', 'export_dataset']),
     JSON.stringify(['synthetic://documents/*']),
     'restricted',
     'v1.0',
     JSON.stringify([]),
+    '{}',
+    '{}',
+    1,
     0.20,
     now - 7200000,
     now
@@ -207,19 +284,129 @@ export function seedDatabase(db?: DatabaseSync): void {
   insertAgent.run(
     'ops-worker-02',
     'Synthetic Archive Janitor',
+    'document_analysis',
     'agnt_live_ops_worker_key_02',
     'usr-admin',
     'System Operations',
+    'System Operations',
     'Lifecycle management and simulated cache pruning',
+    'high',
     'high',
     JSON.stringify(['read_file', 'archive_file']),
     JSON.stringify(['synthetic://archive/*']),
     'paused',
     'v1.0',
     JSON.stringify([]),
+    '{}',
+    '{}',
+    1,
     0.02,
     now - 14400000,
     now - 3600000
+  );
+
+  // Defence Agent A: Predictive Maintenance Agent
+  insertAgent.run(
+    'agent-pred-maint-01',
+    'Predictive Maintenance Agent (Turbine Propulsion)',
+    'predictive_maintenance',
+    'agnt_live_pred_maint_01',
+    'usr-reviewer',
+    'Fleet Readiness & Propulsion',
+    'Fleet Readiness & Propulsion',
+    'Reviews synthetic propulsion equipment telemetry to predict mechanical degradation and issue scheduled maintenance advisories.',
+    'medium',
+    'medium',
+    JSON.stringify(['read_telemetry', 'create_maintenance_ticket', 'archive_file']),
+    JSON.stringify(['synthetic://telemetry/*', 'synthetic://maintenance/*', 'synthetic://archive/*']),
+    'active',
+    'v1.0',
+    JSON.stringify([]),
+    JSON.stringify({
+      required_fields: ['equipment_id', 'timestamp', 'vibration_rms', 'bearing_temp_c'],
+      freshness_max_age_seconds: 300,
+      ranges: {
+        vibration_rms: { min: 0, max: 15 },
+        bearing_temp_c: { min: -20, max: 180 }
+      }
+    }),
+    JSON.stringify({
+      metric: 'model_confidence',
+      minimum_threshold: 0.85,
+      on_below_threshold: 'REQUIRE_APPROVAL',
+      reason: 'CONFIDENCE_BELOW_THRESHOLD_REQUIRES_HUMAN'
+    }),
+    1,
+    0.04,
+    now,
+    now
+  );
+
+  // Defence Agent B: Cybersecurity Monitoring Agent
+  insertAgent.run(
+    'agent-cyber-monitor-02',
+    'Cybersecurity Monitoring Agent (Enclave Defense)',
+    'cybersecurity_monitoring',
+    'agnt_live_cyber_monitor_02',
+    'usr-admin',
+    'Cyber Defense Operations Center',
+    'Cyber Defense Operations Center',
+    'Analyzes synthetic boundary network flow logs, detects unauthorized protocol anomalies, and executes bounded containment.',
+    'high',
+    'high',
+    JSON.stringify(['read_security_logs', 'isolate_host', 'block_ip', 'write_summary']),
+    JSON.stringify(['synthetic://network-logs/*', 'synthetic://enclaves/*', 'synthetic://reports/*']),
+    'active',
+    'v1.0',
+    JSON.stringify([]),
+    JSON.stringify({
+      required_fields: ['event_id', 'timestamp', 'source_ip', 'threat_signature'],
+      freshness_max_age_seconds: 600
+    }),
+    JSON.stringify({
+      metric: 'threat_confidence',
+      minimum_threshold: 0.90,
+      on_below_threshold: 'REQUIRE_APPROVAL',
+      reason: 'CYBER_THREAT_CONFIDENCE_BORDERLINE_REQUIRES_ANALYST'
+    }),
+    1,
+    0.10,
+    now,
+    now
+  );
+
+  // Defence Agent C: Decision Support Agent
+  insertAgent.run(
+    'agent-decision-support-03',
+    'Tactical Reconnaissance Decision Support Agent',
+    'decision_support',
+    'agnt_live_decision_support_03',
+    'usr-researcher',
+    'Joint Tactical Operations',
+    'Joint Tactical Operations',
+    'Synthesizes multi-source synthetic reconnaissance reports, correlates geospatial observations, and prepares briefing recommendations for human commanders.',
+    'high',
+    'high',
+    JSON.stringify(['read_recon_report', 'propose_tactical_recommendation', 'write_summary']),
+    JSON.stringify(['synthetic://recon/*', 'synthetic://briefings/*', 'synthetic://reports/*']),
+    'active',
+    'v1.0',
+    JSON.stringify([]),
+    JSON.stringify({
+      required_fields: ['report_id', 'source_id', 'timestamp', 'coordinates', 'observation'],
+      freshness_max_age_seconds: 1800,
+      conflict_detection: true
+    }),
+    JSON.stringify({
+      metric: 'provenance_reliability',
+      minimum_threshold: 0.80,
+      on_below_threshold: 'REQUIRE_APPROVAL',
+      reason: 'SOURCE_RELIABILITY_LOW_REQUIRES_COMMANDER_REVIEW'
+    }),
+    1,
+    0.08,
+    now,
+    now
   );
 
   // 6. Seed Baseline Incident inc-demo-001 (Workstream C & Demo)

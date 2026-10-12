@@ -94,7 +94,7 @@ export function App() {
     }
   };
 
-  const runSimulation = async (scenario: 'A' | 'B' | 'C') => {
+  const runSimulation = async (scenario: 'A' | 'B' | 'C' | '1' | '2' | '3' | '4') => {
     setSimLoading(true);
     setSimResult(null);
     let payload = {};
@@ -119,6 +119,77 @@ export function App() {
         tool: 'file_purger',
         operation: 'delete_file',
         resource: 'synthetic://documents/defense_intel_brief_2026.txt'
+      };
+    } else if (scenario === '1') {
+      // Scenario 1: Permitted Maintenance Ticket (Fresh telemetry)
+      payload = {
+        agentId: 'agent-pred-maint-01',
+        tool: 'maintenance_planner',
+        operation: 'create_maintenance_ticket',
+        resource: 'synthetic://defense/assets/ground_vehicle_4402',
+        parameters: {
+          telemetry_id: 'TEL-DEF-2026-001',
+          timestamp: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+          vibration_hz: 48,
+          temperature_c: 82,
+          hydraulic_pressure_psi: 2850,
+          uncertainty: 0.12,
+          maintenance_action: 'Routine scheduled hydraulic valve inspection'
+        }
+      };
+    } else if (scenario === '2') {
+      // Scenario 2: Stale Telemetry (Exceeds 3600s freshness window -> Held for human)
+      payload = {
+        agentId: 'agent-pred-maint-01',
+        tool: 'maintenance_planner',
+        operation: 'create_maintenance_ticket',
+        resource: 'synthetic://defense/assets/ground_vehicle_4402',
+        parameters: {
+          telemetry_id: 'TEL-DEF-2026-001',
+          timestamp: new Date(Date.now() - 3 * 3600 * 1000).toISOString(),
+          vibration_hz: 65,
+          temperature_c: 98,
+          hydraulic_pressure_psi: 2600,
+          uncertainty: 0.15,
+          maintenance_action: 'Urgent actuator overhaul'
+        }
+      };
+    } else if (scenario === '3') {
+      // Scenario 3: Prohibited Cyber Response (Boundary violation -> Block + Pause)
+      payload = {
+        agentId: 'agent-cyber-monitor-02',
+        tool: 'cyber_containment',
+        operation: 'wipe_credentials',
+        resource: 'synthetic://defense/enclave/dmz/host-primary',
+        parameters: {
+          reason: 'Containment emergency wipe'
+        }
+      };
+    } else if (scenario === '4') {
+      // Scenario 4: Conflicting Multi-Source Reconnaissance (Held for human review)
+      payload = {
+        agentId: 'agent-decision-support-03',
+        tool: 'tactical_advisor',
+        operation: 'propose_tactical_recommendation',
+        resource: 'synthetic://defense/briefings/sector_7_assessment',
+        parameters: {
+          multi_source_reports: [
+            {
+              source_id: 'UAV-ALPHA',
+              timestamp: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+              observation: 'Hostile armored column advancing North through Pass A',
+              confidence: 0.88
+            },
+            {
+              source_id: 'RADAR-STATION-BRAVO',
+              timestamp: new Date(Date.now() - 8 * 60 * 1000).toISOString(),
+              observation: 'Hostile armored column retreating South away from Pass A',
+              confidence: 0.82
+            }
+          ],
+          recommendation: 'Deploy immediate defensive air patrol over Sector 7 Pass A',
+          uncertainty: 0.15
+        }
       };
     }
 
@@ -342,17 +413,48 @@ export function App() {
   const primaryAgent = agents.find((a) => a.id === 'doc-agent-01') || agents[0];
 
   return (
-    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: '1280px', margin: '0 auto', padding: '1.5rem', color: '#0f172a' }}>
-      {/* Header */}
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #e2e8f0', paddingBottom: '1rem', marginBottom: '1.5rem' }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: '1.75rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span>🛡️</span> AI Governance & Control Plane
-          </h1>
-          <p style={{ margin: '0.25rem 0 0', color: '#64748b', fontSize: '0.9rem' }}>
-            CODEX 3.0 PS5 — Deterministic Policy Gate • Human-vs-Agent Allocation • Leadership Dashboard • Audit Reports
-          </p>
+    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', color: '#0f172a', minHeight: '100vh', backgroundColor: '#f8fafc' }}>
+      {/* Persistent Non-Operational Defence Demo Banner */}
+      <div style={{
+        backgroundColor: '#0f172a',
+        color: '#f8fafc',
+        borderBottom: '3px solid #f59e0b',
+        padding: '0.65rem 1.5rem',
+        fontSize: '0.82rem',
+        fontWeight: 700,
+        letterSpacing: '0.03em',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        position: 'sticky',
+        top: 0,
+        zIndex: 1000,
+        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <span style={{ backgroundColor: '#f59e0b', color: '#0f172a', padding: '2px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 900 }}>
+            DEMO ENVIRONMENT
+          </span>
+          <span style={{ color: '#f1f5f9' }}>
+            SYNTHETIC, NON-OPERATIONAL DATA ONLY — NO CONNECTION TO CLASSIFIED DEFENCE NETWORKS
+          </span>
         </div>
+        <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+          AegisOS v3.0-DEFENCE • Deterministic Governance Engine
+        </div>
+      </div>
+
+      <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '1.5rem' }}>
+        {/* Header */}
+        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #e2e8f0', paddingBottom: '1rem', marginBottom: '1.5rem' }}>
+          <div>
+            <h1 style={{ margin: 0, fontSize: '1.75rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span>🛡️</span> AegisOS — Defence AI Governance & Human Accountability
+            </h1>
+            <p style={{ margin: '0.25rem 0 0', color: '#64748b', fontSize: '0.9rem' }}>
+              Autonomous System Supervision • Input Quality Preconditions • Uncertainty Hold Gates • Tamper-Evident Audit
+            </p>
+          </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
@@ -790,45 +892,141 @@ export function App() {
       {activeTab === 'simulator' && (
         <div>
           <div style={{ backgroundColor: '#f8fafc', padding: '1.5rem', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '1.5rem' }}>
-            <h2 style={{ fontSize: '1.15rem', fontWeight: 700, margin: '0 0 0.5rem' }}>Scenario Quick Launcher (Judge Controls)</h2>
-            <p style={{ margin: '0 0 1.25rem', color: '#64748b', fontSize: '0.9rem' }}>
-              Submit synthetic proposed actions to test the real backend gateway and protected tool boundaries.
-            </p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+              <div>
+                <h2 style={{ fontSize: '1.25rem', fontWeight: 800, margin: '0 0 0.25rem', color: '#0f172a' }}>
+                  🛡️ AegisOS Defence Demonstration Scenarios (Scenarios 1 – 4)
+                </h2>
+                <p style={{ margin: 0, color: '#64748b', fontSize: '0.88rem' }}>
+                  Execute deterministic policy checks, input-quality preconditions, uncertainty gates, and protected simulated tools.
+                </p>
+              </div>
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, backgroundColor: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', padding: '2px 8px', borderRadius: '4px' }}>
+                NON-OPERATIONAL DATA
+              </span>
+            </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
-              <div style={{ backgroundColor: '#fff', padding: '1rem', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
-                <div style={{ fontWeight: 700, color: '#16a34a', marginBottom: '0.25rem' }}>Scenario A: Permitted Action</div>
-                <div style={{ fontSize: '0.82rem', color: '#64748b', marginBottom: '0.75rem' }}>Operation: <code>read_file</code> on <code>synthetic://documents/...</code></div>
+            {/* 4 Defence Scenarios Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+              {/* Scenario 1 */}
+              <div style={{ backgroundColor: '#fff', padding: '1rem', borderRadius: '6px', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.3rem' }}>
+                    <span style={{ fontWeight: 800, color: '#16a34a', fontSize: '0.9rem' }}>Scenario 1: Permitted Maintenance</span>
+                    <span style={{ fontSize: '0.7rem', padding: '1px 6px', borderRadius: '3px', backgroundColor: '#dcfce7', color: '#15803d', fontWeight: 700 }}>ALLOW</span>
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: '#475569', marginBottom: '0.25rem' }}>
+                    Agent: <code>agent-pred-maint-01</code>
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: '#64748b', marginBottom: '0.75rem' }}>
+                    Input: Fresh synthetic telemetry (~5m old, vib 48Hz, temp 82°C). Passes quality schema & freshness.
+                  </div>
+                </div>
+                <button
+                  onClick={() => runSimulation('1')}
+                  disabled={simLoading}
+                  style={{ width: '100%', padding: '0.55rem', backgroundColor: '#16a34a', color: '#fff', border: 'none', borderRadius: '4px', fontWeight: 700, cursor: 'pointer', fontSize: '0.82rem' }}
+                >
+                  {simLoading ? 'Evaluating...' : 'Run Scenario 1 (Expect ALLOW)'}
+                </button>
+              </div>
+
+              {/* Scenario 2 */}
+              <div style={{ backgroundColor: '#fff', padding: '1rem', borderRadius: '6px', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.3rem' }}>
+                    <span style={{ fontWeight: 800, color: '#ca8a04', fontSize: '0.9rem' }}>Scenario 2: Stale Telemetry Precondition</span>
+                    <span style={{ fontSize: '0.7rem', padding: '1px 6px', borderRadius: '3px', backgroundColor: '#fef3c7', color: '#b45309', fontWeight: 700 }}>HOLD</span>
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: '#475569', marginBottom: '0.25rem' }}>
+                    Agent: <code>agent-pred-maint-01</code>
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: '#64748b', marginBottom: '0.75rem' }}>
+                    Input: Stale telemetry (~3h old &gt; 3600s window). Precondition hold prevents unverified ticket creation.
+                  </div>
+                </div>
+                <button
+                  onClick={() => runSimulation('2')}
+                  disabled={simLoading}
+                  style={{ width: '100%', padding: '0.55rem', backgroundColor: '#ca8a04', color: '#fff', border: 'none', borderRadius: '4px', fontWeight: 700, cursor: 'pointer', fontSize: '0.82rem' }}
+                >
+                  {simLoading ? 'Evaluating...' : 'Run Scenario 2 (Expect REQUIRE_APPROVAL)'}
+                </button>
+              </div>
+
+              {/* Scenario 3 */}
+              <div style={{ backgroundColor: '#fff', padding: '1rem', borderRadius: '6px', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.3rem' }}>
+                    <span style={{ fontWeight: 800, color: '#dc2626', fontSize: '0.9rem' }}>Scenario 3: Prohibited Cyber Response</span>
+                    <span style={{ fontSize: '0.7rem', padding: '1px 6px', borderRadius: '3px', backgroundColor: '#fee2e2', color: '#b91c1c', fontWeight: 700 }}>BLOCK & PAUSE</span>
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: '#475569', marginBottom: '0.25rem' }}>
+                    Agent: <code>agent-cyber-monitor-02</code>
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: '#64748b', marginBottom: '0.75rem' }}>
+                    Operation: <code>wipe_credentials</code> on DMZ host. Prohibited by policy; triggers automated containment & pause.
+                  </div>
+                </div>
+                <button
+                  onClick={() => runSimulation('3')}
+                  disabled={simLoading}
+                  style={{ width: '100%', padding: '0.55rem', backgroundColor: '#dc2626', color: '#fff', border: 'none', borderRadius: '4px', fontWeight: 700, cursor: 'pointer', fontSize: '0.82rem' }}
+                >
+                  {simLoading ? 'Evaluating...' : 'Run Scenario 3 (Expect BLOCK & Pause)'}
+                </button>
+              </div>
+
+              {/* Scenario 4 */}
+              <div style={{ backgroundColor: '#fff', padding: '1rem', borderRadius: '6px', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.3rem' }}>
+                    <span style={{ fontWeight: 800, color: '#2563eb', fontSize: '0.9rem' }}>Scenario 4: Conflicting Evidence Hold</span>
+                    <span style={{ fontSize: '0.7rem', padding: '1px 6px', borderRadius: '3px', backgroundColor: '#dbeafe', color: '#1d4ed8', fontWeight: 700 }}>HOLD</span>
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: '#475569', marginBottom: '0.25rem' }}>
+                    Agent: <code>agent-decision-support-03</code>
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: '#64748b', marginBottom: '0.75rem' }}>
+                    Input: Contradictory reports (UAV advancing North vs Radar retreating South). Gate halts action for human analyst.
+                  </div>
+                </div>
+                <button
+                  onClick={() => runSimulation('4')}
+                  disabled={simLoading}
+                  style={{ width: '100%', padding: '0.55rem', backgroundColor: '#2563eb', color: '#fff', border: 'none', borderRadius: '4px', fontWeight: 700, cursor: 'pointer', fontSize: '0.82rem' }}
+                >
+                  {simLoading ? 'Evaluating...' : 'Run Scenario 4 (Expect REQUIRE_APPROVAL)'}
+                </button>
+              </div>
+            </div>
+
+            {/* Baseline Scenarios (A - C) */}
+            <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '1rem' }}>
+              <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#64748b', marginBottom: '0.75rem' }}>
+                Core Governance System Regression Tests (Scenarios A – C)
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '0.75rem' }}>
                 <button
                   onClick={() => runSimulation('A')}
                   disabled={simLoading || primaryAgent?.status === 'paused'}
-                  style={{ width: '100%', padding: '0.5rem', backgroundColor: '#16a34a', color: '#fff', border: 'none', borderRadius: '4px', fontWeight: 600, cursor: 'pointer' }}
+                  style={{ padding: '0.45rem', backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '0.78rem', fontWeight: 600, color: '#1e293b', cursor: 'pointer' }}
                 >
-                  {simLoading ? 'Evaluating...' : 'Run Scenario A (Expect ALLOW)'}
+                  Scenario A: Read File (ALLOW)
                 </button>
-              </div>
-
-              <div style={{ backgroundColor: '#fff', padding: '1rem', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
-                <div style={{ fontWeight: 700, color: '#ca8a04', marginBottom: '0.25rem' }}>Scenario B: Sensitive Action</div>
-                <div style={{ fontSize: '0.82rem', color: '#64748b', marginBottom: '0.75rem' }}>Operation: <code>export_dataset</code> (Requires Human Approval)</div>
                 <button
                   onClick={() => runSimulation('B')}
                   disabled={simLoading || primaryAgent?.status === 'paused'}
-                  style={{ width: '100%', padding: '0.5rem', backgroundColor: '#ca8a04', color: '#fff', border: 'none', borderRadius: '4px', fontWeight: 600, cursor: 'pointer' }}
+                  style={{ padding: '0.45rem', backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '0.78rem', fontWeight: 600, color: '#1e293b', cursor: 'pointer' }}
                 >
-                  {simLoading ? 'Evaluating...' : 'Run Scenario B (Expect REQUIRE_APPROVAL)'}
+                  Scenario B: Export Dataset (REQUIRE_APPROVAL)
                 </button>
-              </div>
-
-              <div style={{ backgroundColor: '#fff', padding: '1rem', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
-                <div style={{ fontWeight: 700, color: '#dc2626', marginBottom: '0.25rem' }}>Scenario C: Prohibited Action</div>
-                <div style={{ fontSize: '0.82rem', color: '#64748b', marginBottom: '0.75rem' }}>Operation: <code>delete_file</code> (Trigger Violation & Pause)</div>
                 <button
                   onClick={() => runSimulation('C')}
                   disabled={simLoading}
-                  style={{ width: '100%', padding: '0.5rem', backgroundColor: '#dc2626', color: '#fff', border: 'none', borderRadius: '4px', fontWeight: 600, cursor: 'pointer' }}
+                  style={{ padding: '0.45rem', backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '0.78rem', fontWeight: 600, color: '#dc2626', cursor: 'pointer' }}
                 >
-                  {simLoading ? 'Evaluating...' : 'Run Scenario C (Expect BLOCK & Pause)'}
+                  Scenario C: Delete File (BLOCK & Pause)
                 </button>
               </div>
             </div>
@@ -836,44 +1034,134 @@ export function App() {
 
           {/* Decision & Execution Results */}
           {simResult && (
-            <div style={{ backgroundColor: '#fff', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '1.25rem' }}>
-              <h3 style={{ margin: '0 0 1rem', fontSize: '1.05rem', fontWeight: 700 }}>Telemetry Evaluation Result</h3>
+            <div style={{ backgroundColor: '#fff', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '1.25rem', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>
+                  Gateway Evaluation & Execution Result
+                </h3>
+                {simResult.agentStatusAfterAction && (
+                  <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                    Agent Post-Action State: <strong style={{ color: simResult.agentStatusAfterAction === 'paused' ? '#dc2626' : '#16a34a' }}>{simResult.agentStatusAfterAction.toUpperCase()}</strong>
+                  </span>
+                )}
+              </div>
               
-              <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
-                <div style={{ flex: 1, padding: '0.75rem', backgroundColor: '#f8fafc', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
-                  <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>GATE DECISION BADGE</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
+                <div style={{ padding: '0.75rem', backgroundColor: '#f8fafc', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 700 }}>GATE DECISION BADGE</div>
                   <div style={{
-                    fontSize: '1.25rem',
-                    fontWeight: 800,
+                    fontSize: '1.35rem',
+                    fontWeight: 900,
                     color: simResult.gateDecision === 'ALLOW' ? '#16a34a' : simResult.gateDecision === 'REQUIRE_APPROVAL' ? '#ca8a04' : '#dc2626'
                   }}>
                     {simResult.gateDecision}
                   </div>
-                  <div style={{ fontSize: '0.78rem', color: '#475569', marginTop: '0.25rem' }}>Code: {simResult.gateReasonCode}</div>
+                  <div style={{ fontSize: '0.78rem', color: '#475569', marginTop: '0.25rem' }}>Code: <code>{simResult.gateReasonCode}</code></div>
                 </div>
 
-                <div style={{ flex: 1, padding: '0.75rem', backgroundColor: '#f8fafc', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
-                  <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>EXECUTION OUTCOME BADGE</div>
+                <div style={{ padding: '0.75rem', backgroundColor: '#f8fafc', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 700 }}>EXECUTION OUTCOME BADGE</div>
                   <div style={{
-                    fontSize: '1.25rem',
-                    fontWeight: 800,
+                    fontSize: '1.35rem',
+                    fontWeight: 900,
                     color: simResult.executionStatus === 'SUCCEEDED' ? '#16a34a' : simResult.executionStatus === 'NOT_EXECUTED' ? '#64748b' : '#dc2626'
                   }}>
                     {simResult.executionStatus}
                   </div>
                   <div style={{ fontSize: '0.78rem', color: '#475569', marginTop: '0.25rem' }}>
-                    Reason: {simResult.nonExecutionReason || 'Completed successfully'}
+                    Status: {simResult.nonExecutionReason || 'Executed successfully via HMAC token'}
                   </div>
                 </div>
+
+                {simResult.approvalId && (
+                  <div style={{ padding: '0.75rem', backgroundColor: '#fffbeb', borderRadius: '6px', border: '1px solid #fde68a' }}>
+                    <div style={{ fontSize: '0.75rem', color: '#92400e', fontWeight: 700 }}>HUMAN AUTHORIZATION REQUIRED</div>
+                    <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#b45309', marginTop: '0.25rem' }}>
+                      Approval Request Queued
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: '#78350f', marginTop: '0.25rem' }}>
+                      ID: <code>{simResult.approvalId}</code>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              <div style={{ fontSize: '0.85rem', color: '#334155', backgroundColor: '#f1f5f9', padding: '0.75rem', borderRadius: '6px' }}>
-                <strong>Explanation:</strong> {simResult.explanation}
+              <div style={{ fontSize: '0.85rem', color: '#334155', backgroundColor: '#f1f5f9', padding: '0.75rem', borderRadius: '6px', marginBottom: '1rem' }}>
+                <strong>Governance Rationale:</strong> {simResult.explanation}
               </div>
+
+              {/* Deterministic Input Quality & Uncertainty Evidence Audit */}
+              {simResult.evidenceChecks && (
+                <div style={{
+                  padding: '1rem',
+                  backgroundColor: simResult.evidenceChecks.passed ? '#f0fdf4' : '#fffbeb',
+                  border: `1px solid ${simResult.evidenceChecks.passed ? '#bbf7d0' : '#fde68a'}`,
+                  borderRadius: '6px',
+                  marginBottom: '1rem'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <span style={{ fontWeight: 800, fontSize: '0.9rem', color: simResult.evidenceChecks.passed ? '#166534' : '#92400e' }}>
+                      🛡️ Input Quality & Uncertainty Evidence Audit
+                    </span>
+                    <span style={{
+                      fontSize: '0.75rem',
+                      fontWeight: 800,
+                      padding: '2px 8px',
+                      borderRadius: '4px',
+                      backgroundColor: simResult.evidenceChecks.passed ? '#dcfce7' : '#fee2e2',
+                      color: simResult.evidenceChecks.passed ? '#15803d' : '#b91c1c'
+                    }}>
+                      {simResult.evidenceChecks.passed ? 'ALL CHECKS PASSED' : 'PRECONDITION HELD / FAILED'}
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+                    {simResult.evidenceChecks.checksPerformed?.map((chk: string) => {
+                      const failed = simResult.evidenceChecks.failedChecks?.includes(chk);
+                      return (
+                        <span key={chk} style={{
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          padding: '2px 6px',
+                          borderRadius: '3px',
+                          backgroundColor: failed ? '#fee2e2' : '#e2e8f0',
+                          color: failed ? '#b91c1c' : '#334155',
+                          border: `1px solid ${failed ? '#fca5a5' : '#cbd5e1'}`
+                        }}>
+                          {failed ? '✕' : '✓'} {chk}
+                        </span>
+                      );
+                    })}
+                  </div>
+
+                  {simResult.evidenceChecks.failedChecks?.length > 0 && (
+                    <div style={{ fontSize: '0.8rem', color: '#b91c1c', fontWeight: 600, marginTop: '0.25rem' }}>
+                      Failed preconditions: {simResult.evidenceChecks.failedChecks.join(', ')}
+                    </div>
+                  )}
+
+                  {simResult.evidenceChecks.evidence && Object.keys(simResult.evidenceChecks.evidence).length > 0 && (
+                    <div style={{ marginTop: '0.5rem', fontSize: '0.78rem', color: '#475569' }}>
+                      <strong>Audit Telemetry Details:</strong>
+                      <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
+                        {simResult.evidenceChecks.evidence.freshnessAgeSeconds !== undefined && (
+                          <span>Freshness Age: <strong>{simResult.evidenceChecks.evidence.freshnessAgeSeconds}s</strong> (window: {simResult.evidenceChecks.evidence.freshnessWindowSeconds}s)</span>
+                        )}
+                        {simResult.evidenceChecks.evidence.uncertainty !== undefined && (
+                          <span>Uncertainty: <strong>{simResult.evidenceChecks.evidence.uncertainty}</strong></span>
+                        )}
+                        {simResult.evidenceChecks.evidence.conflictingObservations && (
+                          <span style={{ color: '#b91c1c' }}>Contradictory Observations Flagged: {simResult.evidenceChecks.evidence.conflictingObservations.length}</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {simResult.result && (
                 <div style={{ marginTop: '1rem' }}>
-                  <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#64748b', marginBottom: '0.25rem' }}>SIMULATED PROTECTED OUTPUT:</div>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#64748b', marginBottom: '0.25rem' }}>SIMULATED PROTECTED OUTPUT (HMAC VERIFIED):</div>
                   <pre style={{ margin: 0, padding: '0.75rem', backgroundColor: '#0f172a', color: '#38bdf8', borderRadius: '6px', fontSize: '0.8rem', overflowX: 'auto' }}>
                     {JSON.stringify(simResult.result, null, 2)}
                   </pre>
@@ -1067,6 +1355,7 @@ export function App() {
                 <div style={{ border: '1px solid #e2e8f0', padding: '0.75rem', borderRadius: '6px' }}>
                   <div style={{ fontWeight: 700, color: '#0f172a', marginBottom: '0.3rem' }}>2. Agent & Ownership at Event</div>
                   <div>Agent ID: <code>{incidentReport.section2_agentAndOwnership.agentId}</code></div>
+                  <div>Category: <strong style={{ color: '#2563eb' }}>{incidentReport.section2_agentAndOwnership.agentCategory || 'general'}</strong></div>
                   <div>Name: {incidentReport.section2_agentAndOwnership.agentName}</div>
                   <div>Owner: <strong>{incidentReport.section2_agentAndOwnership.ownerUserIdAtEvent}</strong></div>
                   <div>Team: {incidentReport.section2_agentAndOwnership.team}</div>
@@ -1088,8 +1377,18 @@ export function App() {
                   <div style={{ fontWeight: 700, color: '#0f172a', marginBottom: '0.3rem' }}>4. Policy Evaluation Gate</div>
                   <div>Policy: <code>{incidentReport.section4_policyEvaluationGate.policyId}</code> ({incidentReport.section4_policyEvaluationGate.policyVersion})</div>
                   <div>Decision: <strong style={{ color: '#dc2626' }}>{incidentReport.section4_policyEvaluationGate.gateDecision}</strong></div>
-                  <div>Reason Code: {incidentReport.section4_policyEvaluationGate.reasonCode}</div>
+                  <div>Reason Code: <code>{incidentReport.section4_policyEvaluationGate.reasonCode}</code></div>
                   <div>Explanation: {incidentReport.section4_policyEvaluationGate.explanation}</div>
+                  {incidentReport.section4_policyEvaluationGate.evidenceChecks && (
+                    <div style={{ marginTop: '0.4rem', padding: '0.3rem 0.5rem', backgroundColor: '#f8fafc', borderRadius: '4px', fontSize: '0.75rem' }}>
+                      Evidence Verification: <strong>{incidentReport.section4_policyEvaluationGate.evidenceChecks.passed ? 'PASSED' : 'HELD'}</strong>
+                      {incidentReport.section4_policyEvaluationGate.evidenceChecks.failedChecks?.length > 0 && (
+                        <span style={{ color: '#dc2626', marginLeft: '0.3rem' }}>
+                          (Failed: {incidentReport.section4_policyEvaluationGate.evidenceChecks.failedChecks.join(', ')})
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Section 5 */}
@@ -1301,25 +1600,59 @@ export function App() {
         <div>
           <h2 style={{ fontSize: '1.15rem', fontWeight: 700, margin: '0 0 1rem' }}>Registered Agents & Versioned Policies</h2>
           
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
             {agents.map((ag) => (
-              <div key={ag.id} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '1rem', backgroundColor: '#fff' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                  <strong>{ag.name}</strong>
-                  <span style={{
-                    padding: '2px 8px',
-                    borderRadius: '4px',
-                    fontSize: '0.75rem',
-                    fontWeight: 700,
-                    backgroundColor: ag.status === 'active' ? '#dcfce7' : ag.status === 'restricted' ? '#fef9c3' : '#fee2e2',
-                    color: ag.status === 'active' ? '#15803d' : ag.status === 'restricted' ? '#a16207' : '#b91c1c'
-                  }}>
-                    {ag.status.toUpperCase()}
-                  </span>
+              <div key={ag.id} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '1.25rem', backgroundColor: '#fff', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
+                  <div>
+                    <strong style={{ fontSize: '1rem', color: '#0f172a' }}>{ag.name}</strong>
+                    {ag.agent_category && (
+                      <div style={{ marginTop: '0.2rem' }}>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 800, padding: '2px 6px', borderRadius: '3px', backgroundColor: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>
+                          {ag.agent_category.toUpperCase()}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.25rem' }}>
+                    <span style={{
+                      padding: '2px 8px',
+                      borderRadius: '4px',
+                      fontSize: '0.75rem',
+                      fontWeight: 800,
+                      backgroundColor: ag.status === 'active' ? '#dcfce7' : ag.status === 'restricted' ? '#fef9c3' : '#fee2e2',
+                      color: ag.status === 'active' ? '#15803d' : ag.status === 'restricted' ? '#a16207' : '#b91c1c'
+                    }}>
+                      {ag.status.toUpperCase()}
+                    </span>
+                    {ag.demo_data_only === 1 && (
+                      <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '1px 5px', borderRadius: '3px', backgroundColor: '#fef3c7', color: '#92400e' }}>
+                        SYNTHETIC DATA
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '0.25rem' }}>ID: <code>{ag.id}</code> | Team: {ag.team}</div>
-                <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '0.5rem' }}>Policy: {ag.policy_version} | Risk: {ag.risk_category}</div>
-                <div style={{ fontSize: '0.78rem', color: '#334155', backgroundColor: '#f8fafc', padding: '0.4rem', borderRadius: '4px' }}>
+
+                {ag.purpose && (
+                  <p style={{ margin: '0.35rem 0 0.6rem', fontSize: '0.82rem', color: '#475569', lineHeight: 1.4 }}>
+                    {ag.purpose}
+                  </p>
+                )}
+
+                <div style={{ fontSize: '0.78rem', color: '#64748b', marginBottom: '0.25rem' }}>
+                  ID: <code>{ag.id}</code> | Owner Team: <strong>{ag.owner_team || ag.team}</strong>
+                </div>
+                <div style={{ fontSize: '0.78rem', color: '#64748b', marginBottom: '0.4rem' }}>
+                  Risk Level: <strong style={{ color: ag.risk_level === 'high' ? '#dc2626' : '#2563eb' }}>{(ag.risk_level || ag.risk_category || 'medium').toUpperCase()}</strong> | Policy: <code>{ag.policy_version}</code>
+                </div>
+
+                {ag.uncertainty_rule && (
+                  <div style={{ fontSize: '0.75rem', color: '#0369a1', backgroundColor: '#f0f9ff', padding: '0.3rem 0.5rem', borderRadius: '4px', marginBottom: '0.4rem' }}>
+                    Uncertainty Rule: <code>{ag.uncertainty_rule}</code>
+                  </div>
+                )}
+
+                <div style={{ fontSize: '0.78rem', color: '#334155', backgroundColor: '#f8fafc', padding: '0.45rem', borderRadius: '4px' }}>
                   <strong>Allowed Operations:</strong> {ag.allowed_operations?.join(', ')}
                 </div>
               </div>
@@ -1392,6 +1725,7 @@ export function App() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

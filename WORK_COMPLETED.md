@@ -1,20 +1,25 @@
-# 🛡️ CODEX 3.0 PS5 — AI Governance & Control Plane
-## Comprehensive Implementation & Progress Report
+# 🛡️ AegisOS (CODEX 3.0 PS5) — Defence AI Governance & Control Plane
+## Comprehensive Implementation & Verification Report
 
 **Repository:** `https://github.com/Divyanshu123-code/codex.git`  
 **Date:** October 12, 2026  
-**Status:** Core Prototype Built, Verified, and Tested (Phases 0–9 Complete)  
-**Gates Satisfied:** G1 (Boundary Invariant), G2 (Approval Invariant), G3 (Recovery Invariant), G4 (Rehearsal Complete)
+**Status:** AegisOS Defence-Specific Adaptation Complete & Verified (55 Tests / 11 Suites Passing)  
+**Gates Satisfied:** G1 (Boundary Invariant), G2 (Approval Invariant), G3 (Recovery Invariant), G4 (Rehearsal Complete)  
+**Environment Boundary:** Demo Environment — Synthetic, Non-Operational Data Only (No connection to classified defence networks)
 
 ---
 
 ## 1. Executive Summary
 
-This project implements an **independent governance layer and control plane for AI agents**, designed according to the CODEX 3.0 PS5 requirements and binding design decisions. 
+This project implements **AegisOS**, an independent governance layer and control plane for defence-relevant autonomous AI systems, adapted from the CODEX 3.0 PS5 architecture according to the `AEGISOS_DEFENCE_ADAPTATION_PLAN.md` specification.
 
 The system intercepts proposed agent actions, executes a deterministic, multi-level policy gate (`ALLOW`, `REQUIRE_APPROVAL`, `BLOCK`) before any protected simulated tools can run, strictly confines agent execution, provides signature-based triage when violations occur, validates proposed workflow repairs inside an isolated sandbox (with structural and behavioural regression checks), and enforces a centralized resume gate requiring human approval and revalidation before resumption.
 
-**Key Technical Differentiator:** The system guarantees **no silent policy weakening**. A diagnostic repair can patch workflow steps, but a strict **Diff Guard** and structural checks prevent it from ever elevating agent permissions, lowering thresholds, or tampering with reference policies.
+**Defence Governance Capabilities Added:**
+1. **Three Synthetic Defence Agent Profiles:** Predictive Maintenance (`agent-pred-maint-01`), Cybersecurity Monitoring (`agent-cyber-monitor-02`), and Tactical Decision Support (`agent-decision-support-03`).
+2. **Deterministic Domain & Input Quality Checks:** Configurable validation for mandatory fields, telemetry freshness windows (e.g. 3600s), numerical ranges (vibration, temperature, pressure), source identification, and multi-source conflict detection.
+3. **Uncertainty & Evidence Hold Gates:** Explicit evaluation of model uncertainty without ever fabricating confidence scores; halts unverified or conflicting proposals for authorized human review.
+4. **Preserved Invariants:** Zero LLM in the critical path, fail-safe defaults, atomic CAS approvals, HMAC-signed tool boundary tokens, and central resume gate (R1–R9).
 
 ---
 
@@ -25,12 +30,13 @@ The system intercepts proposed agent actions, executes a deterministic, multi-le
 | **Language** | TypeScript (Node 26 + Vite) | Full end-to-end type safety across backend engine and frontend UI |
 | **Backend** | Express 4.x + Node.js | Fast, robust HTTP gateway with middleware separation |
 | **Database** | Native SQLite (`node:sqlite`) | Synchronous, zero-dependency, local file database supporting atomic compare-and-set transactions |
-| **Validation** | Zod | Runtime payload and patch validation at API boundaries |
+| **Validation** | Zod | Runtime payload, schema, and patch validation at API boundaries |
 | **Enforcement** | Deterministic Pure TypeScript Engine | **Zero LLM in the critical enforcement path**; 100% predictable and reproducible decisions |
+| **Domain Checks** | Deterministic Input Quality Preconditions | Evaluates telemetry freshness, ranges, source IDs, conflict flags, and uncertainty rules |
 | **Tool Boundary** | HMAC Signed Execution Tokens | Protected simulated tools are private; calls without valid tokens signed by the gateway are rejected |
 | **Audit Log** | SHA-256 Hash Chaining | Append-only, tamper-evident chronological event log |
-| **Testing** | Vitest + Supertest | 45 unit, integration, and rehearsal tests executed in ~5 seconds |
-| **Frontend** | React 19 + Vite + TypeScript | 8-tab operator console with 2.5s live polling |
+| **Testing** | Vitest + Supertest | **55 unit, integration, and defence scenario tests** executed in ~5.2 seconds |
+| **Frontend** | React 19 + Vite + TypeScript | 8-tab operator console with persistent non-operational demo banner and scenario quick launcher |
 
 ---
 
@@ -308,7 +314,7 @@ When presenting to hackathon judges, follow this 3-minute sequence using the Ope
 - **Frontend App:** `frontend/src/App.tsx` updated with 8 comprehensive tabs:
   1. Leadership Dashboard
   2. Work Allocation & Task Intake
-  3. Action Launcher (Scenarios A, B, C)
+  3. Action Launcher (Defence Scenarios 1–4 + Baseline Scenarios A–C)
   4. Approvals Inbox
   5. Incidents & Audit Accountability Report
   6. Sandbox & Verified Recovery
@@ -317,7 +323,56 @@ When presenting to hackathon judges, follow this 3-minute sequence using the Ope
 
 ---
 
-## 9. Verification Summary
+## 10. AegisOS Defence-Specific Adaptation (Phases A – F)
+
+Following the `AEGISOS_DEFENCE_ADAPTATION_PLAN.md` specification, the platform was adapted into **AegisOS** without rewriting verified core functionality or introducing an LLM into the enforcement path.
+
+### Phase A: Repository & Invariants Verification
+- Baseline test verification: 45 tests across 10 test files confirmed passing.
+- Architectural invariants G1–G4 verified and locked.
+
+### Phase B: Defence Data Model & Synthetic Tooling
+- **Schema Migration (`schema.ts`):** Added `agent_category`, `owner_team`, `risk_level`, `input_requirements`, `uncertainty_rule`, `demo_data_only` to `agents`; added `agent_category` and `evidence_checks` to `action_requests` and `incidents`.
+- **Three Synthetic Defence Agent Profiles (`seed.ts`):**
+  1. `agent-pred-maint-01`: Category `predictive_maintenance`, risk `medium`, owner `Fleet Maintenance Wing`. Configured with vibration (10–120 Hz), temperature (20–130°C), pressure (1000–3500 psi) ranges, freshness limit 3600s, max uncertainty 0.35.
+  2. `agent-cyber-monitor-02`: Category `cybersecurity_monitoring`, risk `high`, owner `Defensive Cyber Operations`. Permitted operations: `read_security_logs`, `isolate_host`, `block_ip`. Prohibited operation: `wipe_credentials` on DMZ.
+  3. `agent-decision-support-03`: Category `decision_support`, risk `high`, owner `Joint Intelligence Support Element`. Permitted operations: `read_recon_report`, `propose_tactical_recommendation`. Enforces multi-source conflict detection and max uncertainty 0.25.
+- **Protected Simulated Tool Boundary (`protectedTools.ts`):** Expanded private synthetic state to hold telemetry readings, maintenance tickets, firewall IP tables, enclave isolation statuses, recon reports, and tactical briefings.
+
+### Phase C: Deterministic Input Quality & Uncertainty Preconditions
+- **Engine Module (`inputQuality.ts`):** Evaluates 6 deterministic checks without external network calls or LLMs:
+  1. `required_fields`: Checks required parameters per operation schema.
+  2. `freshness_window`: Enforces that input timestamps are within configured limits (e.g., 3600s).
+  3. `range_validation`: Enforces physical boundary ranges on numerical telemetry.
+  4. `source_identification`: Enforces presence of valid reporting sensor or unit IDs.
+  5. `conflict_detection`: Compares multi-source reconnaissance reports for contradictory assertions or timestamps.
+  6. `uncertainty_evaluation`: Evaluates agent-reported uncertainty against configured thresholds without ever fabricating missing confidence values.
+- **Fail-Safe Precedence Invariant:** Explicit policy prohibitions (`BLOCK`) immediately take precedence over quality holds. Input quality failures map to `REQUIRE_APPROVAL` (hold for human analyst) or `BLOCK`.
+
+### Phase D: Defence Scenarios & End-to-End Test Suite
+- **Test Suite (`backend/tests/defenceScenarios.test.ts`):** 10 automated test cases verifying:
+  - Scenario 1: Fresh telemetry allows maintenance ticket creation (Gate: `ALLOW`, Execution: `SUCCEEDED`).
+  - Scenario 2: Stale telemetry held for human review (Gate: `REQUIRE_APPROVAL`, Code: `STALE_TELEMETRY_HELD_FOR_HUMAN`, Ticket count unchanged).
+  - Scenario 3: Prohibited credential wipe triggers hard block, pauses agent, opens incident (Gate: `BLOCK`, Code: `POLICY_PROHIBITED_OPERATION`, Tool uninvoked).
+  - Scenario 4: Conflicting recon reports held for human review (Gate: `REQUIRE_APPROVAL`, Code: `CONFLICTING_EVIDENCE_HELD_FOR_HUMAN`, No briefing published).
+  - Out-of-range sensor readings trigger quality hold.
+  - Missing mandatory uncertainty metadata held for human review without hallucinating confidence.
+  - High uncertainty exceeding configured threshold triggers human review.
+  - Approval cannot override policy prohibition.
+  - Zero protected tool invocation or state changes on held/blocked requests (Gate G1).
+  - Append-only audit events capture full evidence check results and reason codes.
+
+### Phase E: UI Operator Console Adaptation
+- **Persistent Header Banner:** Sticky top banner reading: `DEMO ENVIRONMENT — SYNTHETIC, NON-OPERATIONAL DATA ONLY — NO CONNECTION TO CLASSIFIED DEFENCE NETWORKS`.
+- **Rebranded Header:** `🛡️ AegisOS — Defence AI Governance & Human Accountability Control Plane`.
+- **Scenario Quick Launcher (Tab 3):** 1-click execution for Defence Scenarios 1–4 alongside baseline Scenarios A–C.
+- **Input Quality & Uncertainty Evidence Audit Card:** Visual pass/fail status, badges for all 6 checks performed, failure alerts, and audit telemetry breakdown.
+- **Enriched Agent Registry (Tab 7):** Displays category badges, operational purposes, owner teams, risk levels, uncertainty rules, and `SYNTHETIC DATA` badges.
+- **Incident Accountability Report (Tab 5):** 11-section chain displaying `agentCategory` and `evidenceChecks` audit findings.
+
+---
+
+## 11. Verification Summary
 
 ```text
 ✓ tests/rehearsal.test.ts (1 test)
@@ -330,8 +385,11 @@ When presenting to hackathon judges, follow this 3-minute sequence using the Ope
 ✓ tests/health.test.ts (2 tests)
 ✓ tests/recovery.test.ts (2 tests)
 ✓ tests/evaluator.test.ts (10 tests)
+✓ tests/defenceScenarios.test.ts (10 tests)
 
-Test Files:  10 passed (10)
-Tests:       45 passed (45)
-Duration:    4.60s
+Test Files:  11 passed (11)
+Tests:       55 passed (55)
+Duration:    5.27s
 ```
+
+All 55 tests pass cleanly. Both backend and frontend build with 0 TypeScript and build errors.

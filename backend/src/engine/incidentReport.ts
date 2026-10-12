@@ -19,6 +19,7 @@ export interface AuditReadyIncidentReport {
   section2_agentAndOwnership: {
     agentId: string;
     agentName: string;
+    agentCategory?: string;
     ownerUserIdAtEvent: string;
     team: string;
     riskCategory: string;
@@ -37,6 +38,7 @@ export interface AuditReadyIncidentReport {
     gateDecision: string;
     reasonCode: string;
     explanation: string;
+    evidenceChecks?: any;
   };
   section5_humanAuthorizationReview: {
     approvalRequired: boolean;
@@ -152,6 +154,7 @@ export function generateIncidentReport(
     section2_agentAndOwnership: {
       agentId: inc.agent_id,
       agentName: agent ? agent.name : 'Unknown Agent',
+      agentCategory: agent?.agent_category || inc.agent_category || 'document_analysis',
       ownerUserIdAtEvent: inc.agent_owner_at_time,
       team: agent ? agent.team : 'Unknown Team',
       riskCategory: agent ? agent.risk_category : 'Unknown'
@@ -169,7 +172,8 @@ export function generateIncidentReport(
       policyVersion: inc.policy_version,
       gateDecision: req ? req.gate_decision : 'BLOCK',
       reasonCode: req ? req.gate_reason_code : 'SECURITY_VIOLATION',
-      explanation: req ? req.explanation : inc.evidence_summary
+      explanation: req ? req.explanation : inc.evidence_summary,
+      evidenceChecks: req?.evidence_checks ? JSON.parse(req.evidence_checks) : inc.evidence_checks ? JSON.parse(inc.evidence_checks) : undefined
     },
     section5_humanAuthorizationReview: {
       approvalRequired: req?.gate_decision === 'REQUIRE_APPROVAL',

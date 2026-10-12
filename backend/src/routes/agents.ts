@@ -15,7 +15,9 @@ agentsRouter.get('/', (req: Request, res: Response) => {
       ...r,
       allowed_operations: JSON.parse(r.allowed_operations),
       allowed_resources: JSON.parse(r.allowed_resources),
-      workflow_config: JSON.parse(r.workflow_config)
+      workflow_config: JSON.parse(r.workflow_config),
+      input_requirements: r.input_requirements ? JSON.parse(r.input_requirements) : {},
+      uncertainty_rule: r.uncertainty_rule ? JSON.parse(r.uncertainty_rule) : {}
     }));
     res.json(agents);
   } catch (err: any) {
@@ -35,7 +37,9 @@ agentsRouter.get('/:id', (req: Request, res: Response) => {
       ...row,
       allowed_operations: JSON.parse(row.allowed_operations),
       allowed_resources: JSON.parse(row.allowed_resources),
-      workflow_config: JSON.parse(row.workflow_config)
+      workflow_config: JSON.parse(row.workflow_config),
+      input_requirements: row.input_requirements ? JSON.parse(row.input_requirements) : {},
+      uncertainty_rule: row.uncertainty_rule ? JSON.parse(row.uncertainty_rule) : {}
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

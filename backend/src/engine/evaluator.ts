@@ -1,10 +1,15 @@
+import { evaluateInputQuality, InputQualityEvaluationResult } from './inputQuality.js';
+
 export interface AgentRecord {
   id: string;
   name: string;
+  agent_category?: string;
   status: 'active' | 'restricted' | 'paused';
   allowed_operations: string[];
   allowed_resources: string[];
   policy_version: string;
+  input_requirements?: Record<string, any>;
+  uncertainty_rule?: Record<string, any>;
 }
 
 export interface ActionInput {
@@ -44,6 +49,7 @@ export interface EvaluationResult {
   severity: 'low' | 'medium' | 'high' | 'critical';
   pauseOnViolation: boolean;
   openIncident: boolean;
+  evidenceChecks?: InputQualityEvaluationResult;
 }
 
 // Utility for glob / wildcard matching (e.g. synthetic://documents/*)
@@ -156,17 +162,64 @@ export function evaluatePolicy(
       }
     }
 
-    let finalDecision: 'ALLOW' | 'REQUIRE_APPROVAL' | 'BLOCK' =
-      selectedPolicy.decision === 'allow'
-        ? 'ALLOW'
-        : selectedPolicy.decision === 'require_approval'
-        ? 'REQUIRE_APPROVAL'
-        : 'BLOCK';
+    // Invariant: If policy explicitly blocks, prohibition takes absolute precedence.
+    // Approval or input quality can NEVER override an explicit policy prohibition.
+    if (selectedPolicy.decision === 'block') {
+      return {
+        decision: 'BLOCK',
+        reasonCode: 'POLICY_DECISION_BLOCK',
+        explanation: `Evaluated against policy ${selectedPolicy.id} (v${selectedPolicy.version}): ${selectedPolicy.name}. Operation explicitly prohibited.`,
+        policyId: selectedPolicy.id,
+        policyVersion: selectedPolicy.version,
+        severity: selectedPolicy.severity,
+        pauseOnViolation: selectedPolicy.pause_on_violation === 1,
+        openIncident: selectedPolicy.open_incident === 1
+      };
+    }
+
+    // 6. Deterministic Input Quality, Freshness & Uncertainty Verification (AegisOS Domain Checks)
+    const qualityResult = evaluateInputQuality(
+      action.parameters,
+      agent.input_requirements,
+      agent.uncertainty_rule
+    );
+
+    if (!qualityResult.valid) {
+      if (qualityResult.decisionOverride === 'BLOCK') {
+        return {
+          decision: 'BLOCK',
+          reasonCode: qualityResult.reasonCode || 'INPUT_VALIDATION_FAILED',
+          explanation: qualityResult.explanation || 'Input quality verification failed.',
+          policyId: selectedPolicy.id,
+          policyVersion: selectedPolicy.version,
+          severity: 'high',
+          pauseOnViolation: false,
+          openIncident: false,
+          evidenceChecks: qualityResult
+        };
+      }
+
+      // decisionOverride is REQUIRE_APPROVAL (e.g. stale telemetry, conflicting evidence, uncertainty)
+      return {
+        decision: 'REQUIRE_APPROVAL',
+        reasonCode: qualityResult.reasonCode || 'INPUT_HELD_FOR_HUMAN_REVIEW',
+        explanation: qualityResult.explanation || 'Input conditions require human review before action.',
+        policyId: selectedPolicy.id,
+        policyVersion: selectedPolicy.version,
+        severity: 'medium',
+        pauseOnViolation: false,
+        openIncident: false,
+        evidenceChecks: qualityResult
+      };
+    }
+
+    let finalDecision: 'ALLOW' | 'REQUIRE_APPROVAL' =
+      selectedPolicy.decision === 'require_approval' ? 'REQUIRE_APPROVAL' : 'ALLOW';
 
     let reasonCode = `POLICY_DECISION_${finalDecision}`;
     let explanation = `Evaluated against policy ${selectedPolicy.id} (v${selectedPolicy.version}): ${selectedPolicy.name}`;
 
-    // 6. Section 3.4 Status Elevation for 'restricted' Agent:
+    // 7. Section 3.4 Status Elevation for 'restricted' Agent:
     // "elevates any ALLOW on a mutating operation to REQUIRE_APPROVAL (reason RESTRICTED_AGENT)"
     if (agent.status === 'restricted' && finalDecision === 'ALLOW') {
       const opInfo = catalog.get(action.operation);
@@ -187,7 +240,8 @@ export function evaluatePolicy(
       policyVersion: selectedPolicy.version,
       severity: selectedPolicy.severity,
       pauseOnViolation: selectedPolicy.pause_on_violation === 1,
-      openIncident: selectedPolicy.open_incident === 1
+      openIncident: selectedPolicy.open_incident === 1,
+      evidenceChecks: qualityResult
     };
   } catch (error: any) {
     // Fail-safe default-deny on any unexpected validator failure (Scenario E, Section 3.8)
