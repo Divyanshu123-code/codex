@@ -414,3 +414,25 @@ Duration:    ~6.4s
 ```
 
 All 57 tests pass cleanly across 11 test suites. Both backend and frontend build with 0 TypeScript and build errors.
+
+---
+
+## 11. Stitch Design System UI Implementation & Backend Integration
+
+Extracted and implemented the institutional Stitch UI architecture from `stitch_ai_agent_governance_os`:
+1. **Design System & Aesthetics (`DESIGN.md`):** Configured Inter & JetBrains Mono typography, Material Symbols Outlined icons, institutional cool canvas (`#faf9fd`), surface containers, and custom palette tokens into `frontend/index.html` and Tailwind configuration.
+2. **Persistent Shell & Header (`Header.tsx`, `Sidebar.tsx`):**
+   - Top demo banner: `Demo Environment — Synthetic, Non-Operational Data Only`
+   - Fixed header with brand shield logo, global search bar, Quick Scenario Runner launcher button, active enforcement pulse, notifications, and operator profile (`Elena Vance - Governance Lead & Delegated Reviewer`).
+   - Side rail with 8 structured views, pending notification counters on Approvals and Incidents, and cryptographic session auth card.
+3. **8 Integrated Views:**
+   - **Overview (`OverviewView.tsx`):** KPI summary cards, Needs Attention queue with direct action triggers, fleet overview, 24h policy outcomes distribution, and recent activity log.
+   - **Agents Fleet (`AgentsView.tsx`):** Searchable agent table, risk tiers, slide-out Agent Details Inspection Drawer with preconditions, range bounds, uncertainty rules, and pause/resume modal.
+   - **Policies Engine (`PoliciesView.tsx`):** Filterable policy cards list, dual-pane inspector with exact rule specifications, trigger scopes, and safety containment directives.
+   - **Approval Inbox (`ApprovalsView.tsx`):** Tri-State governance separation, Plain-Language action synopsis, 6 domain evidence check badges, raw JSON payload viewer, role selector, mandatory written justification, and Approve & Execute / Reject controls.
+   - **Incidents & Containment (`IncidentsView.tsx`):** High-alert red containment banner, closed signature triage, lifecycle timeline, and complete 11-section accountability report viewer.
+   - **Corrections & Recovery (`CorrectionsView.tsx`):** Unified code/config diff viewer, validation check matrix (Structural S1–S6, Behavioural B1–B6, Diff Guard), and Central Recovery Gate R1–R9 checklist with sandbox verification and recovery execution.
+   - **Tasks & Execution (`TasksView.tsx`):** Task registry table, task details, intake form, and human escalation controls.
+   - **Audit Trail (`AuditLogView.tsx`):** SHA-256 hash linkage strip, audit event table, event inspector with parent/current hashes, and live cryptographic verification trigger.
+4. **Scenario Launcher Modal (`ScenarioLauncherModal.tsx`):** 1-click execution for Defence Scenarios 1–5 (and 2A, 2C), showing live gate verdicts (`ALLOW`, `REQUIRE_APPROVAL`, `BLOCK`) and jumping directly into review or incident consoles.
+5. **Browser Verification & Recording:** Automated browser subagent rehearsal executed end-to-end and recorded to WebP video (`aegisos_stitch_ui_rehearsal_1791773906117.webp`).
