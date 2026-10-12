@@ -65,8 +65,8 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
         </div>
       </div>
 
-      {/* 4 Summary Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Summary Stat Cards (including Human Decisions Overturned, Reopen Requests & Cumulative Breaches) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-4">
         
         {/* Card 1: Registered Agents */}
         <div 
@@ -79,7 +79,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           </div>
           <div className="mt-3">
             <div className="text-2xl font-bold text-slate-900">{agents.length}</div>
-            <p className="text-[0.6875rem] text-slate-500 mt-0.5">
+            <p className="text-[0.6875rem] text-slate-500 mt-0.5 truncate">
               {activeAgentsCount} active · {restrictedAgentsCount} restricted · {pausedAgentsCount} paused
             </p>
           </div>
@@ -100,8 +100,8 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           </div>
           <div className="mt-3">
             <div className="text-2xl font-bold text-amber-700">{pendingApprovals.length}</div>
-            <p className="text-[0.6875rem] text-slate-500 mt-0.5">
-              {pendingApprovals.length > 0 ? 'Awaiting human review queue' : 'Queue clear · No pending holds'}
+            <p className="text-[0.6875rem] text-slate-500 mt-0.5 truncate">
+              {pendingApprovals.length > 0 ? 'Awaiting human review' : 'Queue clear'}
             </p>
           </div>
         </div>
@@ -121,8 +121,8 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           </div>
           <div className="mt-3">
             <div className="text-2xl font-bold text-rose-700">{openIncidents.length}</div>
-            <p className="text-[0.6875rem] text-slate-500 mt-0.5">
-              {openIncidents.length > 0 ? 'Containment active · Agent paused' : 'Zero uncontained violations'}
+            <p className="text-[0.6875rem] text-slate-500 mt-0.5 truncate">
+              {openIncidents.length > 0 ? 'Containment active' : 'Zero violations'}
             </p>
           </div>
         </div>
@@ -133,13 +133,70 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           className="p-4 rounded-xl bg-white border border-slate-200 flex flex-col justify-between shadow-sm hover:border-slate-300 transition-all cursor-pointer"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-500 font-medium">Policy Gate Evaluations</span>
+            <span className="text-xs text-slate-500 font-medium">Gate Evaluations</span>
             <span className="material-symbols-outlined text-slate-400 text-[1.25rem]">gpp_good</span>
           </div>
           <div className="mt-3">
             <div className="text-2xl font-bold text-slate-900">{auditEvents.length}</div>
-            <p className="text-[0.6875rem] text-slate-500 mt-0.5">
-              Append-only SHA-256 chain intact
+            <p className="text-[0.6875rem] text-slate-500 mt-0.5 truncate">
+              SHA-256 chain intact
+            </p>
+          </div>
+        </div>
+
+        {/* Card 5: Decisions Overturned */}
+        <div 
+          onClick={() => onNavigateTab('backups')}
+          className="p-4 rounded-xl bg-white border border-slate-200 flex flex-col justify-between shadow-sm hover:border-emerald-300 transition-all cursor-pointer"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-slate-500 font-medium">Decisions Overturned</span>
+            <span className="material-symbols-outlined text-emerald-600 text-[1.25rem]">published_with_changes</span>
+          </div>
+          <div className="mt-3">
+            <div className="text-2xl font-bold text-emerald-600">
+              {dashboardData?.humanIntervention?.humanDecisionsOverturned ?? 0}
+            </div>
+            <p className="text-[0.6875rem] text-slate-500 mt-0.5 truncate">
+              Re-evaluated & cleared
+            </p>
+          </div>
+        </div>
+
+        {/* Card 6: Reopen Requests */}
+        <div 
+          onClick={() => onNavigateTab('backups')}
+          className="p-4 rounded-xl bg-white border border-slate-200 flex flex-col justify-between shadow-sm hover:border-indigo-300 transition-all cursor-pointer"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-slate-500 font-medium">Reopen Requests</span>
+            <span className="material-symbols-outlined text-indigo-600 text-[1.25rem]">restore_page</span>
+          </div>
+          <div className="mt-3">
+            <div className="text-2xl font-bold text-indigo-700">
+              {dashboardData?.humanIntervention?.reopenRequests ?? 0}
+            </div>
+            <p className="text-[0.6875rem] text-slate-500 mt-0.5 truncate">
+              Dual-custody recovery
+            </p>
+          </div>
+        </div>
+
+        {/* Card 7: Cumulative / Velocity Breaches */}
+        <div 
+          onClick={() => onNavigateTab('approvals')}
+          className="p-4 rounded-xl bg-white border border-slate-200 flex flex-col justify-between shadow-sm hover:border-amber-300 transition-all cursor-pointer"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-slate-500 font-medium">Cumulative Breaches</span>
+            <span className="material-symbols-outlined text-amber-600 text-[1.25rem]">speed</span>
+          </div>
+          <div className="mt-3">
+            <div className="text-2xl font-bold text-amber-700">
+              {dashboardData?.humanIntervention?.cumulativeLimitBreaches ?? 0}
+            </div>
+            <p className="text-[0.6875rem] text-slate-500 mt-0.5 truncate">
+              Rolling-window cap escalations
             </p>
           </div>
         </div>

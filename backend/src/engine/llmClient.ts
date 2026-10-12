@@ -128,10 +128,14 @@ function generateDeterministicFallback(options: LLMCallOptions): string {
   switch (options.purpose) {
     case 'L1_PATCH_PROPOSAL':
       return JSON.stringify({
-        summary: 'Constrained workflow correction removing unauthorized step',
-        patch: [
-          { op: 'replace', path: '/workflow_config/2', value: { step_id: 'step_3', operation: 'archive_file', resource: 'synthetic://archive/cleared_briefs.txt' } }
-        ],
+        summary: 'Constrained workflow correction replacing unauthorized step',
+        patch: {
+          action: 'replace_step_operation',
+          target_step_id: 'step_3',
+          new_operation: 'archive_file',
+          new_resource: 'synthetic://archive/cleared_briefs.txt',
+          description: 'Replaces prohibited operation with policy-compliant archival'
+        },
         rationale: 'Replaces prohibited deletion or destructive operation with policy-compliant archival in accordance with closed signature catalog.'
       });
 

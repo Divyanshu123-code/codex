@@ -4,6 +4,7 @@ import { getDatabase } from '../db/connection.js';
 import { writeAuditEvent } from './gateway.js';
 import {
   evaluatePolicy,
+  matchResourcePattern,
   AgentRecord,
   PolicyRecord,
   OperationCatalogRecord
@@ -110,7 +111,7 @@ export function testCorrection(
     message: s3Passed ? 'Protected field invariant preserved.' : 'FAIL: Patch attempted to alter protected agent capabilities.'
   });
 
-  // S4: Any operation introduced must already exist in catalog AND be in agent's allowed operations
+  // S4: Any operation introduced must already exist in catalog AND be in agent's allowed operations, and resource in allowed_resources
   let s4Passed = true;
   let s4Msg = 'No new unauthorized operations introduced.';
   if (patch?.new_operation) {
@@ -121,6 +122,14 @@ export function testCorrection(
     } else if (!agentOps.includes(patch.new_operation)) {
       s4Passed = false;
       s4Msg = `FAIL: Operation '${patch.new_operation}' is not within agent's allowed operations list.`;
+    }
+  }
+  if (s4Passed && patch?.new_resource) {
+    const agentRes = JSON.parse(agentRow.allowed_resources);
+    const inScope = agentRes.some((pattern: string) => matchResourcePattern(pattern, patch.new_resource));
+    if (!inScope) {
+      s4Passed = false;
+      s4Msg = `FAIL: Resource '${patch.new_resource}' is outside agent's authorized allowed_resources.`;
     }
   }
   structuralChecks.push({

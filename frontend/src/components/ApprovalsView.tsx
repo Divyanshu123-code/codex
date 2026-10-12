@@ -4,7 +4,13 @@ import { parseJsonSafe } from '../utils';
 
 interface ApprovalsViewProps {
   approvals: Approval[];
-  onDecideApproval: (approvalId: string, status: 'APPROVED' | 'REJECTED', reason: string, userId: string) => Promise<any>;
+  onDecideApproval: (
+    approvalId: string,
+    status: 'APPROVED' | 'REJECTED',
+    reason: string,
+    userId: string,
+    options?: { wrongCallConfirmed?: boolean }
+  ) => Promise<any>;
   selectedApprovalId?: string | null;
 }
 
@@ -30,6 +36,11 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
   const [isExplaining, setIsExplaining] = useState(false);
   const [isReopening, setIsReopening] = useState(false);
   const [reopenError, setReopenError] = useState<string | null>(null);
+
+  // Wrong-Call Prevention Modal State
+  const [isWrongCallModalOpen, setIsWrongCallModalOpen] = useState(false);
+  const [wrongCallModalReason, setWrongCallModalReason] = useState('');
+  const [wrongCallModalError, setWrongCallModalError] = useState<string | null>(null);
 
   // Sync selectedApproval with selectedApprovalId and fresh approvals array
   useEffect(() => {
@@ -123,40 +134,6 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
     return a.status === statusFilter;
   });
 
-  const handleAction = async (decision: 'APPROVED' | 'REJECTED') => {
-    if (!selectedApproval) return;
-    if (!writtenReason.trim()) {
-      setErrorMessage('A written justification is mandatory for audit accountability.');
-      return;
-    }
-
-    setIsSubmitting(true);
-    setErrorMessage(null);
-    setDecisionResult(null);
-
-    try {
-      const res = await onDecideApproval(
-        selectedApproval.id,
-        decision,
-        writtenReason,
-        reviewerUser
-      );
-      setDecisionResult(res);
-      // update local status
-      setSelectedApproval(prev => prev ? {
-        ...prev,
-        status: decision,
-        reason: writtenReason,
-        approver_id: reviewerUser,
-        execution_status: decision === 'APPROVED' ? 'EXECUTED' : 'NOT_EXECUTED'
-      } : null);
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Approval decision failed');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   // Safe parse helper
   const parsedParams = selectedApproval ? (
     typeof selectedApproval.parameters === 'string'
@@ -169,6 +146,72 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
       ? (() => { try { return JSON.parse(selectedApproval.evidence_checks as string); } catch { return null; } })()
       : selectedApproval.evidence_checks
   ) : null;
+
+  const allChecksPassed = Boolean(
+    parsedEvidence &&
+    Array.isArray(parsedEvidence.checks) &&
+    parsedEvidence.checks.length > 0 &&
+    parsedEvidence.checks.every((c: any) => c.passed === true)
+  );
+
+  const requestAmount = parsedParams?.amount != null ? Number(parsedParams.amount) : null;
+  const extractedLimitMatch = selectedApproval?.request_explanation?.match(/threshold of \$?([0-9,]+)/i);
+  const policyLimit = (selectedApproval as any)?.policy_limit != null
+    ? (selectedApproval as any).policy_limit
+    : (extractedLimitMatch ? Number(extractedLimitMatch[1].replace(/,/g, '')) : (selectedApproval?.operation === 'issue_refund' ? 5000 : null));
+
+  const executeDecision = async (
+    decision: 'APPROVED' | 'REJECTED',
+    reasonText: string,
+    options?: { wrongCallConfirmed?: boolean }
+  ) => {
+    if (!selectedApproval) return;
+    setIsSubmitting(true);
+    setErrorMessage(null);
+    setDecisionResult(null);
+
+    try {
+      const res = await onDecideApproval(
+        selectedApproval.id,
+        decision,
+        reasonText,
+        reviewerUser,
+        options
+      );
+      setDecisionResult(res);
+      // update local status
+      setSelectedApproval(prev => prev ? {
+        ...prev,
+        status: decision,
+        reason: reasonText,
+        approver_id: reviewerUser,
+        execution_status: decision === 'APPROVED' ? 'EXECUTED' : 'NOT_EXECUTED'
+      } : null);
+      setIsWrongCallModalOpen(false);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Approval decision failed');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleAction = async (decision: 'APPROVED' | 'REJECTED') => {
+    if (!selectedApproval) return;
+    if (!writtenReason.trim()) {
+      setErrorMessage('A written justification is mandatory for audit accountability.');
+      return;
+    }
+
+    // Wrong-Call Prevention: If all automated evidence checks passed, require explicit confirmation modal
+    if (decision === 'REJECTED' && allChecksPassed) {
+      setWrongCallModalReason(writtenReason);
+      setWrongCallModalError(null);
+      setIsWrongCallModalOpen(true);
+      return;
+    }
+
+    await executeDecision(decision, writtenReason);
+  };
 
   return (
     <div className="flex flex-col w-full space-y-6">
@@ -665,6 +708,105 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
         )}
 
       </div>
+
+      {/* Wrong-Call Prevention Confirmation Modal */}
+      {isWrongCallModalOpen && selectedApproval && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-xl border border-rose-200 shadow-2xl max-w-lg w-full p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-rose-600 text-[1.5rem]">warning</span>
+                <h3 className="text-base font-bold text-slate-900">Confirm Rejection: Evidence Checks Passed</h3>
+              </div>
+              <button 
+                onClick={() => setIsWrongCallModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 leading-relaxed">
+              <strong>Caution (Wrong-Call Prevention):</strong> All automated evidence and telemetry quality checks have <strong>PASSED</strong> for this request. Rejecting this action overrides verified system preconditions and will be logged in the permanent audit trail.
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                <span className="text-[0.625rem] font-bold uppercase tracking-wider text-slate-500 block">Requested Amount</span>
+                <span className="text-base font-mono font-bold text-slate-900">
+                  {requestAmount != null ? `$${requestAmount.toLocaleString('en-US')}` : 'N/A'}
+                </span>
+              </div>
+              <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                <span className="text-[0.625rem] font-bold uppercase tracking-wider text-slate-500 block">Policy Auto Limit</span>
+                <span className="text-base font-mono font-bold text-indigo-700">
+                  {policyLimit != null ? `$${policyLimit.toLocaleString('en-US')}` : 'N/A'}
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <span className="text-[0.625rem] font-bold uppercase tracking-wider text-slate-500 block mb-1">
+                Passed Automated Evidence Checks ({parsedEvidence?.checks?.length || 0})
+              </span>
+              <div className="p-2.5 rounded-lg bg-emerald-50/60 border border-emerald-200 space-y-1.5 max-h-36 overflow-y-auto">
+                {parsedEvidence?.checks?.map((chk: any, idx: number) => (
+                  <div key={idx} className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-1.5 text-emerald-950 font-medium text-[0.6875rem]">
+                      <span className="material-symbols-outlined text-emerald-600 text-[1rem]">check_circle</span>
+                      <span>{chk.name}</span>
+                    </div>
+                    <span className="px-1.5 py-0.2 rounded font-mono text-[0.625rem] font-bold bg-emerald-200 text-emerald-900">
+                      PASSED
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-[0.6875rem] font-semibold text-slate-700 block mb-1">
+                Mandatory Rejection Justification (Logged to Audit Trail):
+              </label>
+              <textarea
+                rows={2}
+                value={wrongCallModalReason}
+                onChange={(e) => setWrongCallModalReason(e.target.value)}
+                placeholder="Explain the explicit operational reason for rejecting this verified request..."
+                className="w-full text-xs p-2.5 rounded-lg bg-slate-50 border border-slate-200 focus:outline-none focus:ring-1 focus:ring-rose-500 text-slate-900"
+              />
+              {wrongCallModalError && (
+                <span className="text-xs text-rose-600 mt-1 block">{wrongCallModalError}</span>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsWrongCallModalOpen(false)}
+                className="px-3.5 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors"
+              >
+                Cancel (Keep in Queue)
+              </button>
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={async () => {
+                  if (!wrongCallModalReason.trim()) {
+                    setWrongCallModalError('A written reason is required to confirm rejection of a verified request.');
+                    return;
+                  }
+                  await executeDecision('REJECTED', wrongCallModalReason, { wrongCallConfirmed: true });
+                }}
+                className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition-colors shadow-sm flex items-center gap-1.5"
+              >
+                <span className="material-symbols-outlined text-[1rem]">gpp_bad</span>
+                {isSubmitting ? 'Confirming...' : 'Confirm Rejection (Log to Audit)'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { Incident, Tab } from '../types';
 import { parseJsonSafe } from '../utils';
+import { DebugAgentPanel } from './DebugAgentPanel';
 
 interface IncidentsViewProps {
   incidents: Incident[];
@@ -392,7 +393,14 @@ export const IncidentsView: React.FC<IncidentsViewProps> = ({
                 </div>
               )}
 
+              {/* End of Investigation Console */}
             </div>
+
+            {/* Closed-Loop Debug Agent Panel */}
+            <DebugAgentPanel
+              incidentId={selectedIncident.id}
+              onNavigateTab={onNavigateTab}
+            />
           </div>
         ) : (
           <div className="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-400 text-xs">

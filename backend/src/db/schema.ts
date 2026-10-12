@@ -92,6 +92,9 @@ export function initializeSchema(db: DatabaseSync): void {
       severity TEXT NOT NULL CHECK(severity IN ('low', 'medium', 'high', 'critical')),
       pause_on_violation INTEGER NOT NULL DEFAULT 0,
       open_incident INTEGER NOT NULL DEFAULT 0,
+      max_auto_amount REAL,
+      daily_cap REAL,
+      window_minutes INTEGER,
       created_at INTEGER NOT NULL,
       PRIMARY KEY (id, version)
     );
@@ -233,6 +236,8 @@ export function initializeSchema(db: DatabaseSync): void {
       policy_hash TEXT,
       operation TEXT NOT NULL,
       amount REAL,
+      policy_limit REAL,
+      actor TEXT,
       parameters_snapshot TEXT NOT NULL,  -- JSON
       evidence_checks TEXT,               -- JSON
       decision TEXT NOT NULL,
@@ -260,6 +265,21 @@ export function initializeSchema(db: DatabaseSync): void {
       restored_at INTEGER
     );
 
+    -- Closed-Loop Debug Agent Runs table (Debug Agent v2)
+    CREATE TABLE IF NOT EXISTS debug_runs (
+      id TEXT PRIMARY KEY,
+      incident_id TEXT NOT NULL,
+      status TEXT NOT NULL CHECK(status IN ('VERIFIED_READY_FOR_APPROVAL', 'ESCALATED_TO_HUMAN', 'RUNNING')),
+      signature_id TEXT,
+      attempts_count INTEGER NOT NULL DEFAULT 0,
+      attempts_json TEXT NOT NULL,        -- JSON array of attempts
+      final_correction_id TEXT,
+      escalation_reason TEXT,
+      proposal_summary TEXT,
+      created_at INTEGER NOT NULL,
+      completed_at INTEGER
+    );
+
     -- Indexes for performance & quick timeline querying
     CREATE INDEX IF NOT EXISTS idx_audit_agent ON audit_events(agent_id);
     CREATE INDEX IF NOT EXISTS idx_audit_request ON audit_events(request_id);
@@ -271,6 +291,7 @@ export function initializeSchema(db: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS idx_scenario_backups_agent ON scenario_backups(agent_id);
     CREATE INDEX IF NOT EXISTS idx_scenario_backups_req ON scenario_backups(request_id);
     CREATE INDEX IF NOT EXISTS idx_backups_agent ON backups(agent_id);
+    CREATE INDEX IF NOT EXISTS idx_debug_runs_incident ON debug_runs(incident_id);
   `);
 
   // Safe incremental migration for existing databases on disk
@@ -291,7 +312,11 @@ export function initializeSchema(db: DatabaseSync): void {
     `ALTER TABLE incidents ADD COLUMN agent_category TEXT`,
     `ALTER TABLE incidents ADD COLUMN evidence_checks TEXT`,
     `ALTER TABLE policies ADD COLUMN max_auto_amount REAL`,
-    `ALTER TABLE approvals ADD COLUMN reopened_from_id TEXT`
+    `ALTER TABLE policies ADD COLUMN daily_cap REAL`,
+    `ALTER TABLE policies ADD COLUMN window_minutes INTEGER`,
+    `ALTER TABLE approvals ADD COLUMN reopened_from_id TEXT`,
+    `ALTER TABLE scenario_backups ADD COLUMN policy_limit REAL`,
+    `ALTER TABLE scenario_backups ADD COLUMN actor TEXT`
   ];
 
   for (const sql of migrations) {

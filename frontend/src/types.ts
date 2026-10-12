@@ -19,6 +19,9 @@ export interface ScenarioBackup {
   policy_version?: string;
   policy_hash?: string;
   operation: string;
+  amount?: number | null;
+  policy_limit?: number | null;
+  actor?: string | null;
   parameters_snapshot: Record<string, any>;
   evidence_checks?: Record<string, any> | null;
   decision: 'ALLOW' | 'REQUIRE_APPROVAL' | 'BLOCK';
@@ -145,6 +148,55 @@ export interface Correction {
   verification_results?: string | Record<string, any>;
 }
 
+export interface DebugAttempt {
+  attemptNumber?: number;
+  attempt_number?: number;
+  source: 'anthropic_api' | 'deterministic_fallback' | 'catalog_deterministic' | 'catalog_template' | 'llm_generation' | string;
+  promptHash?: string;
+  responseHash?: string;
+  prompt_hash?: string;
+  response_hash?: string;
+  patchProposal?: any;
+  proposed_patch?: any;
+  rationale?: string;
+  remediation_summary?: string;
+  verdict?: 'PASS' | 'FAIL' | 'INCONCLUSIVE';
+  validator_verdict?: 'PASS' | 'FAIL';
+  structuralChecks?: any[];
+  structural_checks?: any[];
+  behaviouralChecks?: any[];
+  behavioural_checks?: any[];
+  diffGuardPassed?: boolean;
+  diff_guard_passed?: boolean;
+  failureReasons?: string[];
+  failure_reasons?: string[];
+  durationMs?: number;
+  created_at?: number;
+}
+
+export interface DebugRunResult {
+  runId?: string;
+  run_id?: string;
+  incidentId?: string;
+  incident_id?: string;
+  status: 'VERIFIED_READY_FOR_APPROVAL' | 'ESCALATED_TO_HUMAN';
+  signatureId?: string;
+  signature_id?: string;
+  attemptsCount?: number;
+  attempts_count?: number;
+  attempts: DebugAttempt[];
+  finalCorrectionId?: string | null;
+  final_correction_id?: string | null;
+  escalationReason?: string | null;
+  escalation_reason?: string | null;
+  proposalSummary?: string | null;
+  proposal_summary?: string | null;
+  createdAt?: number;
+  completedAt?: number;
+  created_at?: number;
+  completed_at?: number;
+}
+
 export interface Task {
   id: string;
   type_id: string;
@@ -218,6 +270,10 @@ export interface DashboardData {
     escalatedTasksCount: number;
     pauseEventsCount: number;
     recoveryAttemptsCount: number;
+    humanDecisionsOverturned?: number;
+    reopenRequests?: number;
+    reinstatements?: number;
+    cumulativeLimitBreaches?: number;
   };
   costAndValueEstimates?: {
     disclaimer: string;

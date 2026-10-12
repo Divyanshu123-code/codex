@@ -122,7 +122,8 @@ describe('Resilient Advisory LLM Client (llmClient.ts)', () => {
     );
 
     expect(patchOutcome.source).toBe('deterministic_fallback');
-    expect(Array.isArray(patchOutcome.patch)).toBe(true);
+    expect(typeof patchOutcome.patch).toBe('object');
+    expect(patchOutcome.patch.action).toBe('replace_step_operation');
     expect(patchOutcome.rationale).toBeTruthy();
 
     const decisionOutcome = await explainGateDecision(

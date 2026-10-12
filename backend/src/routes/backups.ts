@@ -114,14 +114,17 @@ backupsRouter.post('/:id/reopen', (req: Request, res: Response) => {
     // 3. Prohibited Operation Invariant: Explicit policy prohibitions CANNOT be reopened (Section 6c Rule 4)
     if (
       backup.decision === 'BLOCK' &&
-      (backup.reason_code === 'POLICY_DECISION_BLOCK' || backup.reason_code === 'OPERATION_NOT_ALLOWED')
+      (backup.reason_code === 'POLICY_DECISION_BLOCK' ||
+       backup.reason_code === 'OPERATION_NOT_ALLOWED' ||
+       backup.reason_code === 'DEFAULT_DENY_NO_POLICY' ||
+       backup.reason_code.includes('PROHIBIT'))
     ) {
       return res.status(400).json({
         error: 'CANNOT_REOPEN_PROHIBITED_OPERATION: Explicit policy prohibitions cannot be reopened or overridden.'
       });
     }
 
-    // 4. Decision State Check: Only rejected approvals or non-prohibition blocks can be reopened
+    // 4. Decision State Check: Only rejected approvals or non-prohibition holds can be reopened
     let humanDec: any = null;
     if (backup.human_decision) {
       try {
@@ -137,18 +140,31 @@ backupsRouter.post('/:id/reopen', (req: Request, res: Response) => {
       });
     }
 
-    // 5. Configurable Window Check: Default 24h (86,400,000 ms) (Section 6c Rule 1)
-    const MAX_REOPEN_WINDOW_MS = 24 * 60 * 60 * 1000;
+    // 5. Configurable Window Check: Overridable via REOPEN_WINDOW_MS, default 24h (86,400,000 ms)
+    const configuredWindowMs = process.env.REOPEN_WINDOW_MS
+      ? parseInt(process.env.REOPEN_WINDOW_MS, 10)
+      : 24 * 60 * 60 * 1000;
+    const MAX_REOPEN_WINDOW_MS = isNaN(configuredWindowMs) ? 24 * 60 * 60 * 1000 : configuredWindowMs;
     if (now - backup.created_at > MAX_REOPEN_WINDOW_MS) {
       return res.status(400).json({
-        error: 'EXPIRED_REOPEN_WINDOW: The 24-hour administrative reconsideration window has expired.'
+        error: `EXPIRED_REOPEN_WINDOW: The administrative reconsideration window (${MAX_REOPEN_WINDOW_MS}ms) has expired.`
       });
     }
 
     // 6. Idempotency Check: Reopen allowed only ONCE per request (Section 6c Rule 1)
-    if (backup.correction_status === 'REOPENED' || backup.correction_status === 'CORRECTED') {
+    const priorReopen = db.prepare(`
+      SELECT id FROM scenario_backups 
+      WHERE request_id = ? AND (correction_status = 'REOPENED' OR correction_status = 'CORRECTED')
+    `).get(backup.request_id);
+
+    const priorReopenedApproval = db.prepare(`
+      SELECT id FROM approvals 
+      WHERE request_id = ? AND reopened_from_id IS NOT NULL
+    `).get(backup.request_id);
+
+    if (backup.correction_status === 'REOPENED' || backup.correction_status === 'CORRECTED' || priorReopen || priorReopenedApproval) {
       return res.status(400).json({
-        error: 'ALREADY_REOPENED: This decision has already been reopened. Multiple reopenings are prohibited.'
+        error: 'ALREADY_REOPENED: This decision has already been reopened. Reopen is allowed at most once per request.'
       });
     }
 

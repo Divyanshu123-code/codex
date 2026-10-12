@@ -32,6 +32,8 @@ export interface PolicyRecord {
   pause_on_violation: number;
   open_incident: number;
   max_auto_amount?: number | null;
+  daily_cap?: number | null;
+  window_minutes?: number | null;
 }
 
 export interface OperationCatalogRecord {
@@ -41,12 +43,21 @@ export interface OperationCatalogRecord {
   simulated_cost: number;
 }
 
+export interface EvaluationContext {
+  cumulativeAmount?: number;
+  transactionCount?: number;
+}
+
 export interface EvaluationResult {
   decision: 'ALLOW' | 'REQUIRE_APPROVAL' | 'BLOCK';
   reasonCode: string;
   explanation: string;
   policyId?: string;
   policyVersion?: string;
+  policyLimit?: number | null;
+  dailyCap?: number | null;
+  windowMinutes?: number | null;
+  cumulativeAmount?: number | null;
   severity: 'low' | 'medium' | 'high' | 'critical';
   pauseOnViolation: boolean;
   openIncident: boolean;
@@ -72,7 +83,8 @@ export function evaluatePolicy(
   agent: AgentRecord | null | undefined,
   action: ActionInput,
   policies: PolicyRecord[],
-  catalog: Map<string, OperationCatalogRecord>
+  catalog: Map<string, OperationCatalogRecord>,
+  context?: EvaluationContext
 ): EvaluationResult {
   try {
     // 1. Identity & Agent Existence Check
@@ -172,6 +184,7 @@ export function evaluatePolicy(
         explanation: `Evaluated against policy ${selectedPolicy.id} (v${selectedPolicy.version}): ${selectedPolicy.name}. Operation explicitly prohibited.`,
         policyId: selectedPolicy.id,
         policyVersion: selectedPolicy.version,
+        policyLimit: selectedPolicy.max_auto_amount != null ? Number(selectedPolicy.max_auto_amount) : null,
         severity: selectedPolicy.severity,
         pauseOnViolation: selectedPolicy.pause_on_violation === 1,
         openIncident: selectedPolicy.open_incident === 1
@@ -193,6 +206,7 @@ export function evaluatePolicy(
           explanation: qualityResult.explanation || 'Input quality verification failed.',
           policyId: selectedPolicy.id,
           policyVersion: selectedPolicy.version,
+          policyLimit: selectedPolicy.max_auto_amount != null ? Number(selectedPolicy.max_auto_amount) : null,
           severity: 'high',
           pauseOnViolation: false,
           openIncident: false,
@@ -207,6 +221,7 @@ export function evaluatePolicy(
         explanation: qualityResult.explanation || 'Input conditions require human review before action.',
         policyId: selectedPolicy.id,
         policyVersion: selectedPolicy.version,
+        policyLimit: selectedPolicy.max_auto_amount != null ? Number(selectedPolicy.max_auto_amount) : null,
         severity: 'medium',
         pauseOnViolation: false,
         openIncident: false,
@@ -224,6 +239,34 @@ export function evaluatePolicy(
           explanation: `Requested amount of $${reqAmount} exceeds delegated auto-approval threshold of $${selectedPolicy.max_auto_amount} under policy ${selectedPolicy.id}. Elevated to human approval.`,
           policyId: selectedPolicy.id,
           policyVersion: selectedPolicy.version,
+          policyLimit: selectedPolicy.max_auto_amount,
+          dailyCap: selectedPolicy.daily_cap != null ? Number(selectedPolicy.daily_cap) : null,
+          windowMinutes: selectedPolicy.window_minutes != null ? Number(selectedPolicy.window_minutes) : null,
+          severity: 'medium',
+          pauseOnViolation: false,
+          openIncident: false,
+          evidenceChecks: qualityResult
+        };
+      }
+    }
+
+    // 6c. Rolling-Window Cumulative / Velocity Cap Check (Per-Agent Cumulative Threshold)
+    if (selectedPolicy.decision === 'allow' && selectedPolicy.daily_cap != null) {
+      const reqAmount = typeof action.parameters?.amount === 'number' ? action.parameters.amount : 0;
+      const priorCumulative = typeof context?.cumulativeAmount === 'number' ? context.cumulativeAmount : 0;
+      const totalCumulative = priorCumulative + reqAmount;
+
+      if (totalCumulative > selectedPolicy.daily_cap) {
+        return {
+          decision: 'REQUIRE_APPROVAL',
+          reasonCode: 'CUMULATIVE_LIMIT_EXCEEDED_HELD_FOR_HUMAN',
+          explanation: `Requested amount of $${reqAmount} brings rolling ${selectedPolicy.window_minutes || 1440}m cumulative total to $${totalCumulative}, exceeding daily cap of $${selectedPolicy.daily_cap} under policy ${selectedPolicy.id}. Elevated to human approval.`,
+          policyId: selectedPolicy.id,
+          policyVersion: selectedPolicy.version,
+          policyLimit: selectedPolicy.daily_cap,
+          dailyCap: selectedPolicy.daily_cap,
+          windowMinutes: selectedPolicy.window_minutes || 1440,
+          cumulativeAmount: totalCumulative,
           severity: 'medium',
           pauseOnViolation: false,
           openIncident: false,
@@ -257,6 +300,10 @@ export function evaluatePolicy(
       explanation,
       policyId: selectedPolicy.id,
       policyVersion: selectedPolicy.version,
+      policyLimit: selectedPolicy.max_auto_amount != null ? Number(selectedPolicy.max_auto_amount) : null,
+      dailyCap: selectedPolicy.daily_cap != null ? Number(selectedPolicy.daily_cap) : null,
+      windowMinutes: selectedPolicy.window_minutes != null ? Number(selectedPolicy.window_minutes) : null,
+      cumulativeAmount: context?.cumulativeAmount,
       severity: selectedPolicy.severity,
       pauseOnViolation: selectedPolicy.pause_on_violation === 1,
       openIncident: selectedPolicy.open_incident === 1,

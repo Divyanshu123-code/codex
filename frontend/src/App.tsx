@@ -136,7 +136,8 @@ export function App() {
     approvalId: string,
     status: 'APPROVED' | 'REJECTED',
     reason: string,
-    userId: string
+    userId: string,
+    options?: { wrongCallConfirmed?: boolean }
   ) => {
     const res = await fetch(`/api/approvals/${approvalId}/decision`, {
       method: 'POST',
@@ -147,7 +148,9 @@ export function App() {
         approverId: userId,
         userId,
         approverRole: userId.includes('admin') ? 'admin' : 'reviewer',
-        reason
+        reason,
+        wrongCallConfirmed: options?.wrongCallConfirmed,
+        overridePassedChecks: options?.wrongCallConfirmed
       })
     });
     if (!res.ok) {

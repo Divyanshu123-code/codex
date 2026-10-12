@@ -190,7 +190,9 @@ export function routeAction(
     severity: p.severity,
     pause_on_violation: p.pause_on_violation,
     open_incident: p.open_incident,
-    max_auto_amount: p.max_auto_amount != null ? Number(p.max_auto_amount) : null
+    max_auto_amount: p.max_auto_amount != null ? Number(p.max_auto_amount) : null,
+    daily_cap: p.daily_cap != null ? Number(p.daily_cap) : null,
+    window_minutes: p.window_minutes != null ? Number(p.window_minutes) : null
   }));
 
   // 3. Fetch Operations Catalog
@@ -205,8 +207,45 @@ export function routeAction(
     });
   }
 
+  // 3b. Compute Rolling-Window Cumulative Usage for Agent (Deterministic read query)
+  // Non-negotiable: Blocked and held actions cause zero side-effects and do NOT count toward total.
+  // Only successfully executed actions (executions.status = 'SUCCEEDED') count.
+  let cumulativeAmount = 0;
+  const relevantPolicy = policies.find(p =>
+    (p.applicable_agent_id === null || p.applicable_agent_id === action.agent_id) &&
+    (p.operation === '*' || p.operation === action.operation) &&
+    p.daily_cap != null
+  );
+  if (relevantPolicy && relevantPolicy.daily_cap != null) {
+    const windowMinutes = relevantPolicy.window_minutes || 1440;
+    const windowStart = now - (windowMinutes * 60 * 1000);
+
+    const pastExecutedRows = targetDb.prepare(`
+      SELECT ar.parameters
+      FROM action_requests ar
+      JOIN executions e ON ar.id = e.request_id
+      WHERE ar.agent_id = ?
+        AND ar.operation = ?
+        AND e.status = 'SUCCEEDED'
+        AND e.created_at >= ?
+    `).all(action.agent_id, action.operation, windowStart) as any[];
+
+    for (const row of pastExecutedRows) {
+      try {
+        const parsed = typeof row.parameters === 'string' ? JSON.parse(row.parameters) : row.parameters;
+        if (parsed && typeof parsed.amount === 'number' && !isNaN(parsed.amount)) {
+          cumulativeAmount += parsed.amount;
+        }
+      } catch {
+        // Ignore unparseable parameters
+      }
+    }
+  }
+
   // 4. Run pure evaluation
-  const evaluation = evaluatePolicy(agent, action, policies, catalog);
+  const evaluation = evaluatePolicy(agent, action, policies, catalog, {
+    cumulativeAmount
+  });
 
   // 5. Insert action_requests row (State: PROPOSED -> Evaluated)
   targetDb.prepare(`
@@ -396,11 +435,13 @@ export function routeAction(
       correlationId: requestId,
       agentId: action.agent_id,
       agentCategory: agent?.agent_category || 'unknown',
+      actor: action.agent_id,
       policyId: evaluation.policyId || null,
       policyVersion: evaluation.policyVersion || null,
       policyHash,
       operation: action.operation,
       amount: reqAmount,
+      limit: evaluation.policyLimit ?? null,
       parameters: action.parameters || {},
       evidenceChecks: evaluation.evidenceChecks,
       decision: 'REQUIRE_APPROVAL',
@@ -422,7 +463,18 @@ export function routeAction(
       requestId,
       incidentId: null,
       correctionId: null,
-      safeDetails: { approvalId, status: 'PENDING', backupId: backup.backupId, snapshotHash: backup.snapshotHash }
+      safeDetails: {
+        approvalId,
+        status: 'PENDING',
+        backupId: backup.backupId,
+        snapshotHash: backup.snapshotHash,
+        amount: reqAmount,
+        limit: evaluation.policyLimit ?? null,
+        policyHash,
+        reasonCode: evaluation.reasonCode,
+        actor: action.agent_id,
+        evidenceChecks: evaluation.evidenceChecks
+      }
     }, targetDb);
 
     return {
@@ -475,11 +527,13 @@ export function routeAction(
     correlationId: requestId,
     agentId: action.agent_id,
     agentCategory: agent?.agent_category || 'unknown',
+    actor: action.agent_id,
     policyId: evaluation.policyId || null,
     policyVersion: evaluation.policyVersion || null,
     policyHash,
     operation: action.operation,
     amount: reqAmount,
+    limit: evaluation.policyLimit ?? null,
     parameters: action.parameters || {},
     evidenceChecks: evaluation.evidenceChecks,
     decision: 'BLOCK',
@@ -511,7 +565,12 @@ export function routeAction(
       incidentOpened: !!incidentId,
       agentPaused: evaluation.pauseOnViolation,
       backupId: blockBackup.backupId,
-      snapshotHash: blockBackup.snapshotHash
+      snapshotHash: blockBackup.snapshotHash,
+      amount: reqAmount,
+      limit: evaluation.policyLimit ?? null,
+      policyHash,
+      actor: action.agent_id,
+      evidenceChecks: evaluation.evidenceChecks
     }
   }, targetDb);
 
@@ -537,11 +596,13 @@ export function recordScenarioBackup(
     correlationId: string;
     agentId: string;
     agentCategory: string;
+    actor?: string | { id: string; type?: string; role?: string };
     policyId: string | null;
     policyVersion: string | null;
     policyHash: string | null;
     operation: string;
     amount: number | null;
+    limit?: number | null;
     parameters: any;
     evidenceChecks: any;
     decision: string;
@@ -551,13 +612,25 @@ export function recordScenarioBackup(
 ): { backupId: string; snapshotHash: string } {
   const backupId = `sbkp-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
   const now = Date.now();
+  const actorStr = typeof data.actor === 'string'
+    ? data.actor
+    : data.actor
+      ? JSON.stringify(data.actor)
+      : data.agentId;
+
   const snapshotPayload = JSON.stringify({
     backupId,
     requestId: data.requestId,
     agentId: data.agentId,
+    actor: actorStr,
+    policyId: data.policyId,
+    policyVersion: data.policyVersion,
+    policyHash: data.policyHash,
     operation: data.operation,
     amount: data.amount,
+    limit: data.limit ?? null,
     parameters: data.parameters,
+    evidenceChecks: data.evidenceChecks,
     decision: data.decision,
     reasonCode: data.reasonCode,
     timestamp: now
@@ -567,10 +640,10 @@ export function recordScenarioBackup(
   targetDb.prepare(`
     INSERT INTO scenario_backups (
       id, correlation_id, request_id, agent_id, agent_category, policy_id, policy_version,
-      policy_hash, operation, amount, parameters_snapshot, evidence_checks, decision,
+      policy_hash, operation, amount, policy_limit, actor, parameters_snapshot, evidence_checks, decision,
       reason_code, approval_id, execution_status, snapshot_hash, created_at, correction_status
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'NOT_EXECUTED', ?, ?, 'NONE')
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'NOT_EXECUTED', ?, ?, 'NONE')
   `).run(
     backupId,
     data.correlationId,
@@ -582,6 +655,8 @@ export function recordScenarioBackup(
     data.policyHash,
     data.operation,
     data.amount,
+    data.limit ?? null,
+    actorStr,
     JSON.stringify(data.parameters || {}),
     data.evidenceChecks ? JSON.stringify(data.evidenceChecks) : null,
     data.decision,

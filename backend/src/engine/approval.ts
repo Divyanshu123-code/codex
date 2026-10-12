@@ -32,7 +32,8 @@ export function decideApproval(
   decision: 'APPROVED' | 'REJECTED',
   approver: { id: string; role: string },
   reason: string,
-  db?: DatabaseSync
+  db?: DatabaseSync,
+  options?: { wrongCallConfirmed?: boolean }
 ): ApprovalDecisionResult {
   const targetDb = db || getDatabase();
 
@@ -104,6 +105,53 @@ export function decideApproval(
       WHERE request_id = ?
     `).run(now, requestId);
 
+    // Check if evidence checks on this request all passed (Wrong-Call Prevention Audit Trail)
+    let checksAllPassed = false;
+    let passedCheckNames: string[] = [];
+    if (requestRow.evidence_checks) {
+      try {
+        const ev = typeof requestRow.evidence_checks === 'string'
+          ? JSON.parse(requestRow.evidence_checks)
+          : requestRow.evidence_checks;
+        if (ev && Array.isArray(ev.checks) && ev.checks.length > 0 && ev.checks.every((c: any) => c.passed === true)) {
+          checksAllPassed = true;
+          passedCheckNames = ev.checks.map((c: any) => c.name);
+        }
+      } catch {}
+    }
+
+    if (checksAllPassed || options?.wrongCallConfirmed) {
+      let reqAmount: number | null = null;
+      try {
+        const p = JSON.parse(requestRow.parameters || '{}');
+        if (typeof p.amount === 'number') reqAmount = p.amount;
+      } catch {}
+
+      writeAuditEvent({
+        eventType: 'REJECTION_CONFIRMED_DESPITE_PASSED_CHECKS',
+        actorType: 'human',
+        actorId: approver.id,
+        agentId: requestRow.agent_id,
+        agentOwner: agentRow ? agentRow.owner_user_id : null,
+        policyId: requestRow.policy_id,
+        policyVersion: requestRow.policy_version,
+        resourceReference: requestRow.resource,
+        decision: 'REJECTED',
+        outcome: 'CONFIRMED_REJECTION_DESPITE_PASSED_CHECKS',
+        requestId,
+        incidentId: null,
+        correctionId: null,
+        safeDetails: {
+          approvalId,
+          approverRole: approver.role,
+          amount: reqAmount,
+          passedChecks: passedCheckNames,
+          rejectionReason: reason,
+          warningAcknowledged: true
+        }
+      }, targetDb);
+    }
+
     try {
       const decisionDetails = JSON.stringify({
         approverId: approver.id,
@@ -126,6 +174,7 @@ export function decideApproval(
           backupId,
           requestId,
           agentId: requestRow.agent_id,
+          actor: approver.id,
           operation: requestRow.operation,
           parameters: requestRow.parameters,
           decision: 'REJECTED',
@@ -137,10 +186,10 @@ export function decideApproval(
         targetDb.prepare(`
           INSERT INTO scenario_backups (
             id, correlation_id, request_id, agent_id, agent_category, policy_id, policy_version,
-            policy_hash, operation, amount, parameters_snapshot, evidence_checks, decision,
+            policy_hash, operation, amount, policy_limit, actor, parameters_snapshot, evidence_checks, decision,
             reason_code, approval_id, human_decision, execution_status, snapshot_hash, created_at, correction_status
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'NOT_EXECUTED', ?, ?, 'NONE')
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'NOT_EXECUTED', ?, ?, 'NONE')
         `).run(
           backupId,
           requestId,
@@ -152,6 +201,8 @@ export function decideApproval(
           null,
           requestRow.operation,
           null,
+          null,
+          approver.id,
           typeof requestRow.parameters === 'string' ? requestRow.parameters : JSON.stringify(requestRow.parameters || {}),
           typeof requestRow.evidence_checks === 'string' ? requestRow.evidence_checks : (requestRow.evidence_checks ? JSON.stringify(requestRow.evidence_checks) : null),
           requestRow.gate_decision || 'REQUIRE_APPROVAL',

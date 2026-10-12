@@ -13,6 +13,7 @@ import { tasksRouter } from './routes/tasks.js';
 import { dashboardRouter } from './routes/dashboard.js';
 import { backupsRouter } from './routes/backups.js';
 import { demoRouter } from './routes/demo.js';
+import { debugRouter } from './routes/debug.js';
 
 export function createApp(): Express {
   const app = express();
@@ -37,6 +38,7 @@ export function createApp(): Express {
   app.use('/api/dashboard', dashboardRouter);
   app.use('/api/backups', backupsRouter);
   app.use('/api/demo', demoRouter);
+  app.use('/api/debug', debugRouter);
 
   // Health check endpoint (Phase 1 deliverable)
   app.get('/api/health', (req: Request, res: Response) => {

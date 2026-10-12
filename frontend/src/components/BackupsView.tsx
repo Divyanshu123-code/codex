@@ -396,6 +396,22 @@ export const BackupsView: React.FC<BackupsViewProps> = ({ onRefresh, onNavigateT
                     <span className="text-slate-500 block">Policy Version:</span>
                     <span className="font-mono text-slate-800">{selectedScenario.policy_version || '1.0.0'}</span>
                   </div>
+                  <div>
+                    <span className="text-slate-500 block">Amount / Limit:</span>
+                    <span className="font-mono font-bold text-slate-800">
+                      {selectedScenario.amount != null ? `$${selectedScenario.amount.toLocaleString('en-US')}` : 'N/A'} / {selectedScenario.policy_limit != null ? `$${selectedScenario.policy_limit.toLocaleString('en-US')}` : 'N/A'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block">Actor Identity:</span>
+                    <span className="font-mono text-slate-800 truncate block">{selectedScenario.actor || 'agent'}</span>
+                  </div>
+                  {selectedScenario.policy_hash && (
+                    <div className="col-span-2">
+                      <span className="text-slate-500 block">Policy Hash:</span>
+                      <span className="font-mono text-[0.625rem] text-slate-600 truncate block">{selectedScenario.policy_hash}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -406,6 +422,17 @@ export const BackupsView: React.FC<BackupsViewProps> = ({ onRefresh, onNavigateT
                     {JSON.stringify(selectedScenario.parameters_snapshot, null, 2)}
                   </pre>
                 </div>
+
+                {selectedScenario.evidence_checks && (
+                  <div>
+                    <span className="text-[0.625rem] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">
+                      Evidence Checks Snapshot
+                    </span>
+                    <pre className="p-2 bg-emerald-50/50 border border-emerald-200 rounded font-mono text-[0.625rem] text-emerald-900 max-h-28 overflow-auto">
+                      {JSON.stringify(selectedScenario.evidence_checks, null, 2)}
+                    </pre>
+                  </div>
+                )}
 
                 {selectedScenario.human_decision && (
                   <div className="p-2.5 bg-rose-50/70 border border-rose-200 rounded text-xs space-y-1">

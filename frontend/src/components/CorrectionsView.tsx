@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { Correction, Tab } from '../types';
 import { parseJsonSafe } from '../utils';
+import { DebugAgentPanel } from './DebugAgentPanel';
 
 interface CorrectionsViewProps {
   corrections: Correction[];
@@ -211,7 +212,8 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
 
         {/* Right Column: Selected Correction Inspector (~60% / 7 cols) */}
         {selectedCorrection ? (
-          <div className="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
+          <div className="lg:col-span-7 space-y-4">
+            <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
             
             {/* Status Banner */}
             <div className={`p-3.5 rounded-xl border flex items-start gap-3 ${
@@ -364,7 +366,16 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
                 {isApplying ? 'Applying Recovery...' : 'Execute Recovery & Resume Agent'}
               </button>
             </div>
+          </div>
 
+          {/* Associated Closed-Loop Debug Agent Timeline */}
+          {selectedCorrection.incident_id && (
+              <DebugAgentPanel
+                incidentId={selectedCorrection.incident_id}
+                onNavigateTab={onNavigateTab}
+                onRefresh={onRefresh}
+              />
+            )}
           </div>
         ) : (
           <div className="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-400 text-xs">

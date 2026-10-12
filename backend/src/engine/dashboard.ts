@@ -53,6 +53,7 @@ export interface LeadershipDashboardData {
     humanDecisionsOverturned: number;
     reopenRequests: number;
     reinstatements: number;
+    cumulativeLimitBreaches: number;
   };
   costAndValueEstimates: {
     disclaimer: 'SIMULATED ESTIMATE --- NOT VERIFIED SAVINGS';
@@ -182,6 +183,11 @@ export function getLeadershipDashboard(
     WHERE event_type = 'AGENT_REINSTATED' AND timestamp BETWEEN ? AND ?
   `).get(fromTime, toTime) as any;
 
+  const cumulativeBreachesRow = targetDb.prepare(`
+    SELECT COUNT(*) as count FROM action_requests 
+    WHERE gate_reason_code = 'CUMULATIVE_LIMIT_EXCEEDED_HELD_FOR_HUMAN' AND received_at BETWEEN ? AND ?
+  `).get(fromTime, toTime) as any;
+
   // 4. Simulated Cost & Labor Value Calculations
   // Estimated operating cost: sum(execution * simulated_cost)
   const opCostRow = targetDb.prepare(`
@@ -272,7 +278,8 @@ export function getLeadershipDashboard(
       recoveryAttemptsCount: recoveryAttemptsRow?.count || 0,
       humanDecisionsOverturned: overturnedRow?.count || 0,
       reopenRequests: reopenCount,
-      reinstatements: reinstatementsRow?.count || 0
+      reinstatements: reinstatementsRow?.count || 0,
+      cumulativeLimitBreaches: cumulativeBreachesRow?.count || 0
     },
     costAndValueEstimates: {
       disclaimer: 'SIMULATED ESTIMATE --- NOT VERIFIED SAVINGS',

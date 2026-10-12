@@ -44,7 +44,9 @@ const decisionSchema = z.object({
   userId: z.string().optional(),
   approverRole: z.string().optional(),
   role: z.string().optional(),
-  reason: z.string().min(1, 'Reason is mandatory')
+  reason: z.string().min(1, 'Reason is mandatory'),
+  wrongCallConfirmed: z.boolean().optional(),
+  overridePassedChecks: z.boolean().optional()
 });
 
 function handleDecision(req: Request, res: Response) {
@@ -62,12 +64,15 @@ function handleDecision(req: Request, res: Response) {
     const approverId = parsed.data.approverId || parsed.data.userId || 'usr-reviewer';
     const approverRole = parsed.data.approverRole || parsed.data.role || (approverId.includes('admin') ? 'admin' : 'reviewer');
     const reason = parsed.data.reason;
+    const wrongCallConfirmed = Boolean(parsed.data.wrongCallConfirmed || parsed.data.overridePassedChecks);
 
     const result = decideApproval(
       req.params.id,
       decision,
       { id: approverId, role: approverRole },
-      reason
+      reason,
+      undefined,
+      { wrongCallConfirmed }
     );
 
     res.json(result);
@@ -115,6 +120,7 @@ approvalsRouter.post('/:id/reopen', (req: Request, res: Response) => {
         backupId,
         requestId: reqRow.id,
         agentId: reqRow.agent_id,
+        actor: actorId,
         operation: reqRow.operation,
         parameters: reqRow.parameters,
         decision: 'REJECTED',
@@ -125,12 +131,12 @@ approvalsRouter.post('/:id/reopen', (req: Request, res: Response) => {
       db.prepare(`
         INSERT INTO scenario_backups (
           id, correlation_id, request_id, agent_id, agent_category, policy_id, policy_version,
-          policy_hash, operation, amount, parameters_snapshot, evidence_checks, decision,
+          policy_hash, operation, amount, policy_limit, actor, parameters_snapshot, evidence_checks, decision,
           reason_code, approval_id, human_decision, execution_status, snapshot_hash, created_at, correction_status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'NOT_EXECUTED', ?, ?, 'NONE')
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'NOT_EXECUTED', ?, ?, 'NONE')
       `).run(
         backupId, reqRow.id, reqRow.id, reqRow.agent_id, reqRow.agent_category || 'unknown',
-        reqRow.policy_id, reqRow.policy_version, null, reqRow.operation, null,
+        reqRow.policy_id, reqRow.policy_version, null, reqRow.operation, null, null, actorId,
         reqRow.parameters, reqRow.evidence_checks, reqRow.gate_decision || 'REQUIRE_APPROVAL',
         reqRow.gate_reason_code || 'APPROVAL_REJECTED', approval.id,
         JSON.stringify({ approverId: approval.approver_id, reason: approval.reason, decidedAt: approval.decided_at }),
@@ -139,17 +145,12 @@ approvalsRouter.post('/:id/reopen', (req: Request, res: Response) => {
       backup = db.prepare('SELECT * FROM scenario_backups WHERE id = ?').get(backupId) as any;
     }
 
-    // 3. Reset this approval directly to PENDING so it is immediately active and re-evaluatable
+    // 3. Create a NEW pending approval row (Invariant: Original rejection row is NEVER modified)
+    const newApprovalId = `appr-reopen-${now}-${Math.random().toString(36).substring(2, 6)}`;
     db.prepare(`
-      UPDATE approvals
-      SET status = 'PENDING',
-          approver_id = NULL,
-          approver_role = NULL,
-          reason = NULL,
-          decided_at = NULL,
-          reopened_from_id = COALESCE(reopened_from_id, id)
-      WHERE id = ?
-    `).run(approvalId);
+      INSERT INTO approvals (id, request_id, status, requested_at, reopened_from_id)
+      VALUES (?, ?, 'PENDING', ?, ?)
+    `).run(newApprovalId, approval.request_id, now, approval.id);
 
     // Reset executions status
     db.prepare(`
@@ -164,10 +165,10 @@ approvalsRouter.post('/:id/reopen', (req: Request, res: Response) => {
         UPDATE scenario_backups
         SET correction_status = 'REOPENED', reopens_approval_id = ?, restored_at = ?
         WHERE id = ?
-      `).run(approvalId, now, backup.id);
+      `).run(newApprovalId, now, backup.id);
     }
 
-    // 4. Log DECISION_OVERTURNED audit event
+    // 4. Log DECISION_OVERTURNED audit event linking old rejection to reopen
     writeAuditEvent({
       eventType: 'DECISION_OVERTURNED',
       actorType: 'human',
@@ -183,15 +184,18 @@ approvalsRouter.post('/:id/reopen', (req: Request, res: Response) => {
       incidentId: null,
       correctionId: null,
       safeDetails: {
-        approvalId,
-        reopeningReason: reason
+        originalApprovalId: approval.id,
+        newApprovalId,
+        reopeningReason: reason,
+        snapshotHash: backup ? backup.snapshot_hash : null
       }
     }, db);
 
     res.json({
       success: true,
       message: 'Approval case reopened for re-evaluation.',
-      approvalId,
+      approvalId: newApprovalId,
+      newApprovalId,
       status: 'PENDING'
     });
   } catch (err: any) {
