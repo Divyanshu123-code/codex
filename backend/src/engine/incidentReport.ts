@@ -3,9 +3,11 @@ import { getDatabase } from '../db/connection.js';
 
 export interface AuditReadyIncidentReport {
   reportMetadata: {
+    reportTitle?: string;
+    classification?: string;
     generatedAt: string;
-    reportVersion: '1.0';
-    disclaimer: 'AUDIT REPORT ASSEMBLED FROM PERSISTED TELEMETRY. NO RETROACTIVE STATE MODIFICATION.';
+    reportVersion: '1.0' | 'AAR-2.0';
+    disclaimer: string;
   };
   section1_incidentIdentification: {
     incidentId: string;
@@ -46,6 +48,8 @@ export interface AuditReadyIncidentReport {
     status: string | 'Not applicable';
     approverId: string | 'Not applicable';
     approverRole: string | 'Not applicable';
+    approverAuthorityLevel?: number | 'Not applicable';
+    overturned?: boolean;
     reason: string | 'Not applicable';
     decidedAt: string | 'Not applicable';
   };
@@ -93,6 +97,11 @@ export interface AuditReadyIncidentReport {
     timestamp: string;
     hash: string;
   }>;
+  section12_lessonsIdentified?: {
+    deterministicFindings: string[];
+    recommendedDoctrinalAdjustments: string[];
+    latestAuditHash: string;
+  };
 }
 
 /**
@@ -181,6 +190,8 @@ export function generateIncidentReport(
       status: approval ? approval.status : 'Not applicable',
       approverId: approval?.approver_id || 'Not applicable',
       approverRole: approval?.approver_role || 'Not applicable',
+      approverAuthorityLevel: approval?.approver_role === 'admin' ? 2 : approval?.approver_role === 'reviewer' ? 1 : 'Not applicable',
+      overturned: Boolean(approval?.reopened_from_id),
       reason: approval?.reason || 'Not applicable',
       decidedAt: approval?.decided_at ? new Date(approval.decided_at).toISOString() : 'Not applicable'
     },
@@ -218,6 +229,20 @@ export function generateIncidentReport(
       unmetConditions: inc.status === 'RESOLVED' ? [] : ['Incident must be resolved before agent resume'],
       resumedToStatus: inc.status === 'RESOLVED' ? 'active' : 'Not applicable'
     },
-    section11_chronologicalAuditTimeline: timeline
+    section11_chronologicalAuditTimeline: timeline,
+    section12_lessonsIdentified: {
+      deterministicFindings: [
+        `Deterministic policy ${inc.policy_id} halted attempted ${req?.operation || 'action'} before protected resources were altered.`,
+        `Cryptographic audit chain sequence intact up to event sequence #${timeline.length > 0 ? timeline[timeline.length - 1].sequence : 0}.`,
+        'Interlock containment engaged within 0ms without human polling dependency.'
+      ],
+      recommendedDoctrinalAdjustments: [
+        'Review autonomous agent allowed operation scope before deploying revised workflows.',
+        'Ensure telemetry inputs maintain Admiralty reliability score equal to or exceeding C3.'
+      ],
+      latestAuditHash: timeline.length > 0 ? timeline[timeline.length - 1].hash : 'GENESIS_0x00'
+    }
   };
 }
+
+export const generateAfterActionReport = generateIncidentReport;

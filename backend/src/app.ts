@@ -14,33 +14,30 @@ import { dashboardRouter } from './routes/dashboard.js';
 import { backupsRouter } from './routes/backups.js';
 import { demoRouter } from './routes/demo.js';
 import { debugRouter } from './routes/debug.js';
+import { liveAgentRouter } from './routes/liveAgent.js';
+import { authRouter } from './routes/auth.js';
+import { requireAuth } from './auth/middleware.js';
 
 export function createApp(): Express {
   const app = express();
 
-  app.use(cors());
+  // P6: Restrict CORS to frontend origin from env variable
+  const allowedOrigin = process.env.FRONTEND_URL || process.env.CORS_ORIGIN || 'http://localhost:5173';
+  app.use(cors({
+    origin: (origin, callback) => {
+      if (!origin || origin === allowedOrigin || process.env.NODE_ENV === 'test') {
+        callback(null, true);
+      } else {
+        callback(new Error(`CORS blocked for origin: ${origin}`));
+      }
+    },
+    credentials: true
+  }));
+
   app.use(express.json());
 
-  // Mount API routers
-  app.use('/api/agents', agentsRouter);
-  app.use('/api/policies', policiesRouter);
-  app.use('/api/actions', actionsRouter);
-  app.use('/api/approvals', approvalsRouter);
-  app.use('/api/incidents', incidentsRouter);
-  app.use('/api/audit', auditRouter);
-  app.use('/api/corrections', correctionsRouter);
-  app.use('/api/tasks', tasksRouter);
-  app.use('/api/task-types', (req: Request, res: Response, next) => {
-    // Map /api/task-types to tasksRouter's /types
-    req.url = '/types';
-    tasksRouter(req, res, next);
-  });
-  app.use('/api/dashboard', dashboardRouter);
-  app.use('/api/backups', backupsRouter);
-  app.use('/api/demo', demoRouter);
-  app.use('/api/debug', debugRouter);
-
-  // Health check endpoint (Phase 1 deliverable)
+  // Public Endpoints
+  // 1. Health check endpoint (Phase 1 deliverable, public)
   app.get('/api/health', (req: Request, res: Response) => {
     try {
       const db = getDatabase();
@@ -71,22 +68,31 @@ export function createApp(): Express {
     }
   });
 
-  // Demo reset endpoint (FR-12 demo requirement)
-  app.post('/api/demo/reset', (req: Request, res: Response) => {
-    try {
-      seedDatabase();
-      res.status(200).json({
-        success: true,
-        message: 'Demo environment reset to baseline synthetic state',
-        timestamp: new Date().toISOString()
-      });
-    } catch (error: any) {
-      res.status(500).json({
-        success: false,
-        error: error.message
-      });
-    }
+  // 2. Auth router (login, me, demo-users)
+  app.use('/api/auth', authRouter);
+
+  // Authenticated Endpoints (P6: requireAuth middleware protects all operational surfaces)
+  app.use('/api', requireAuth);
+
+  // Mount operational API routers
+  app.use('/api/agents', agentsRouter);
+  app.use('/api/policies', policiesRouter);
+  app.use('/api/actions', actionsRouter);
+  app.use('/api/approvals', approvalsRouter);
+  app.use('/api/incidents', incidentsRouter);
+  app.use('/api/audit', auditRouter);
+  app.use('/api/corrections', correctionsRouter);
+  app.use('/api/tasks', tasksRouter);
+  app.use('/api/task-types', (req: Request, res: Response, next) => {
+    // Map /api/task-types to tasksRouter's /types
+    req.url = '/types';
+    tasksRouter(req, res, next);
   });
+  app.use('/api/dashboard', dashboardRouter);
+  app.use('/api/backups', backupsRouter);
+  app.use('/api/demo', demoRouter);
+  app.use('/api/debug', debugRouter);
+  app.use('/api/live-agent', liveAgentRouter);
 
   return app;
 }

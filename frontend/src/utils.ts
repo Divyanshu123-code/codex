@@ -12,3 +12,39 @@ export async function parseJsonSafe<T = any>(res: Response): Promise<T | null> {
     return null;
   }
 }
+
+/**
+ * Safely format dates without throwing RangeError on invalid time values.
+ */
+export function formatSafeDate(dateVal: any): string {
+  if (!dateVal) return '—';
+  try {
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return String(dateVal);
+    return d.toISOString();
+  } catch {
+    return String(dateVal);
+  }
+}
+
+export function formatSafeTime(dateVal: any): string {
+  if (!dateVal) return '—';
+  try {
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return String(dateVal);
+    return d.toLocaleTimeString();
+  } catch {
+    return String(dateVal);
+  }
+}
+
+export function formatSafeDateTime(dateVal: any): string {
+  if (!dateVal) return '—';
+  try {
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return String(dateVal);
+    return d.toLocaleString();
+  } catch {
+    return String(dateVal);
+  }
+}

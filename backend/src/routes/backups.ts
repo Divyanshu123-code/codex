@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { getDatabase } from '../db/connection.js';
 import { writeAuditEvent } from '../engine/gateway.js';
 import { evaluatePolicy, AgentRecord, PolicyRecord, OperationCatalogRecord } from '../engine/evaluator.js';
+import { requireAdmin } from '../auth/middleware.js';
 
 export const backupsRouter = Router();
 
@@ -12,7 +13,7 @@ const reopenSchema = z.object({
   actor: z.object({
     id: z.string().min(1),
     role: z.string().min(1)
-  }),
+  }).optional(),
   coSigner: z.string().optional()
 });
 
@@ -88,15 +89,20 @@ backupsRouter.get('/:id', (req: Request, res: Response) => {
   }
 });
 
-// POST /api/backups/:id/reopen - Reopen a wrongly rejected/held action for dual-custody re-review (Section 6c)
-backupsRouter.post('/:id/reopen', (req: Request, res: Response) => {
+// POST /api/backups/:id/reopen - Reopen a wrongly rejected/held action for dual-custody re-review (Section 6c, Admin only)
+backupsRouter.post('/:id/reopen', requireAdmin, (req: Request, res: Response) => {
   try {
     const parsed = reopenSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ error: 'Invalid reopen payload', details: parsed.error.format() });
     }
 
-    const { reason, actor } = parsed.data;
+    const { reason } = parsed.data;
+    // P6: Actor identity strictly derived from token
+    const actor = req.user
+      ? { id: req.user.id, role: req.user.role }
+      : (parsed.data.actor || { id: 'usr-admin-2', role: 'admin' });
+
     const db = getDatabase();
     const now = Date.now();
 

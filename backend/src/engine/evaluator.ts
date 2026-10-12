@@ -8,6 +8,7 @@ export interface AgentRecord {
   allowed_operations: string[];
   allowed_resources: string[];
   policy_version: string;
+  permitted_data_scopes?: string[];
   input_requirements?: Record<string, any>;
   uncertainty_rule?: Record<string, any>;
 }
@@ -137,6 +138,25 @@ export function evaluatePolicy(
         pauseOnViolation: true,
         openIncident: true
       };
+    }
+
+    // 4b. Security Classification & Need-to-Know Boundary (P5c)
+    const requestedMarking = action.parameters?.classification || action.parameters?.marking;
+    if (requestedMarking && typeof requestedMarking === 'string') {
+      const allowedScopes = agent.permitted_data_scopes || [
+        'UNCLASSIFIED//EXERCISE',
+        'RESTRICTED//EXERCISE'
+      ];
+      if (!allowedScopes.includes(requestedMarking)) {
+        return {
+          decision: 'BLOCK',
+          reasonCode: 'UNAUTHORIZED_CLEARANCE_SCOPE_BLOCKED',
+          explanation: `Requested classification marking '${requestedMarking}' exceeds or falls outside agent permitted data scopes: [${allowedScopes.join(', ')}]. Access permanently blocked.`,
+          severity: 'critical',
+          pauseOnViolation: true,
+          openIncident: true
+        };
+      }
     }
 
     // 5. Policy Matching (FR-2)

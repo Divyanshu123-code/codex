@@ -1,14 +1,16 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import request from 'supertest';
 import { createApp } from '../src/app.js';
 import { seedDatabase } from '../src/db/seed.js';
 import { resetSyntheticStorage, getSyntheticStorageState } from '../src/tools/protectedTools.js';
 import { getDatabase } from '../src/db/connection.js';
+import { createDynamicAuthedRequest } from './helpers/authHelper.js';
+
+const request = (appInstance: any) => createDynamicAuthedRequest(appInstance);
 
 describe('AegisOS Policy Threshold, Backup & Wrong Human Call Reinstatement (Claims C1-C4, Sections 6b/6c)', () => {
   const app = createApp();
 
   beforeEach(() => {
+    process.env.DEMO_MODE = 'true';
     seedDatabase();
     resetSyntheticStorage();
   });

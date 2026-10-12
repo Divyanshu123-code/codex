@@ -4,14 +4,24 @@ import { resetSyntheticStorage } from '../tools/protectedTools.js';
 import { routeAction } from '../engine/gateway.js';
 import { decideApproval } from '../engine/approval.js';
 import { getDatabase } from '../db/connection.js';
+import { resetLiveAgentRateLimit } from './liveAgent.js';
+import { requireAdmin } from '../auth/middleware.js';
 
 export const demoRouter = Router();
 
-// POST /api/demo/reset - Clean environment reset & baseline seeding (Claim C4 / Section 6d)
-demoRouter.post('/reset', (req: Request, res: Response) => {
+// POST /api/demo/reset - Clean environment reset & baseline seeding (Admin only & DEMO_MODE=true)
+demoRouter.post('/reset', requireAdmin, (req: Request, res: Response) => {
+  if (process.env.DEMO_MODE !== 'true') {
+    return res.status(403).json({
+      error: 'Demo reset endpoint is disabled. Set DEMO_MODE=true to enable.',
+      timestamp: Date.now()
+    });
+  }
+
   try {
     seedDatabase();
     resetSyntheticStorage();
+    resetLiveAgentRateLimit();
     res.json({
       success: true,
       message: 'Demo environment successfully reset and re-seeded with synthetic unclassified baselines.',

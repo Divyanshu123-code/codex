@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import type { Approval } from '../types';
-import { parseJsonSafe } from '../utils';
+import type { Approval, AuthUser } from '../types';
+import { parseJsonSafe, formatSafeTime } from '../utils';
 
 interface ApprovalsViewProps {
   approvals: Approval[];
@@ -8,16 +8,17 @@ interface ApprovalsViewProps {
     approvalId: string,
     status: 'APPROVED' | 'REJECTED',
     reason: string,
-    userId: string,
     options?: { wrongCallConfirmed?: boolean }
   ) => Promise<any>;
   selectedApprovalId?: string | null;
+  currentUser?: AuthUser;
 }
 
 export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
   approvals,
   onDecideApproval,
-  selectedApprovalId
+  selectedApprovalId,
+  currentUser
 }) => {
   const [selectedApproval, setSelectedApproval] = useState<Approval | null>(
     selectedApprovalId 
@@ -27,7 +28,6 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
 
   const [statusFilter, setStatusFilter] = useState<'all' | 'PENDING' | 'APPROVED' | 'REJECTED'>('all');
   const [writtenReason, setWrittenReason] = useState('Authorized by lead reviewer for mission brief');
-  const [reviewerUser, setReviewerUser] = useState<'usr-reviewer' | 'usr-admin' | 'usr-admin-2'>('usr-reviewer');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [decisionResult, setDecisionResult] = useState<any>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -63,13 +63,6 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
     }
   }, [selectedApprovalId, approvals]);
 
-  // When selectedApproval has reopened_from_id, default reviewerUser to usr-admin-2 for dual-custody
-  useEffect(() => {
-    if (selectedApproval?.reopened_from_id) {
-      setReviewerUser('usr-admin-2');
-    }
-  }, [selectedApproval?.id, selectedApproval?.reopened_from_id]);
-
   const handleReopenDirect = async () => {
     if (!selectedApproval) return;
     setIsReopening(true);
@@ -79,8 +72,6 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: 'usr-admin-2',
-          role: 'admin',
           reason: 'Reopened following administrative review for re-evaluation of mistaken rejection.'
         })
       });
@@ -96,7 +87,6 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
         approver_id: null,
         execution_status: 'NOT_EXECUTED'
       } : null);
-      setReviewerUser('usr-admin-2');
       setWrittenReason('Re-evaluation clearance confirmed following administrative audit review.');
     } catch (err: any) {
       setReopenError(err.message || 'Failed to reopen case');
@@ -175,7 +165,6 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
         selectedApproval.id,
         decision,
         reasonText,
-        reviewerUser,
         options
       );
       setDecisionResult(res);
@@ -184,7 +173,7 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
         ...prev,
         status: decision,
         reason: reasonText,
-        approver_id: reviewerUser,
+        approver_id: currentUser?.username || 'authorized-reviewer',
         execution_status: decision === 'APPROVED' ? 'EXECUTED' : 'NOT_EXECUTED'
       } : null);
       setIsWrongCallModalOpen(false);
@@ -362,7 +351,7 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
                           Re-evaluate
                         </span>
                       )}
-                      <span>{new Date(item.requested_at).toLocaleTimeString()}</span>
+                      <span>{formatSafeTime(item.requested_at)}</span>
                     </div>
                   </div>
                 </div>
@@ -580,19 +569,19 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
                   </div>
                 )}
 
-                <div>
-                  <label className="text-[0.6875rem] font-semibold text-slate-700 block mb-1">
-                    Reviewer Identity & Clearance Role:
-                  </label>
-                  <select 
-                    value={reviewerUser}
-                    onChange={(e: any) => setReviewerUser(e.target.value)}
-                    className="w-full text-xs p-1.5 rounded-lg bg-white border border-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
-                  >
-                    <option value="usr-reviewer">usr-reviewer (Delegated Governance Reviewer)</option>
-                    <option value="usr-admin">usr-admin (Mission Director & System Administrator)</option>
-                    <option value="usr-admin-2">usr-admin-2 (Secondary Governance Director)</option>
-                  </select>
+                <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[0.6875rem] font-semibold text-slate-600">Reviewer Identity (JWT Token-Bound):</span>
+                    <span className="text-xs font-mono font-bold text-slate-800 flex items-center gap-1">
+                      <span className="material-symbols-outlined text-xs text-indigo-600">verified_user</span>
+                      @{currentUser?.username || 'reviewer'} (L{currentUser?.authority_level ?? 1})
+                    </span>
+                  </div>
+                  {currentUser?.role === 'auditor' && (
+                    <div className="mt-1.5 text-[0.6875rem] text-rose-700 bg-rose-50 border border-rose-200 p-1.5 rounded">
+                      Auditor role is read-only. Reviewer or Admin clearance required to approve/reject requests.
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -617,16 +606,20 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
                 <div className="flex items-center gap-2 pt-1">
                   <button
                     onClick={() => handleAction('APPROVED')}
-                    disabled={isSubmitting}
-                    className="flex-1 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+                    disabled={isSubmitting || currentUser?.role === 'auditor'}
+                    className={`flex-1 px-3 py-2 rounded-lg text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm ${
+                      currentUser?.role === 'auditor' ? 'bg-slate-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700'
+                    }`}
                   >
                     <span className="material-symbols-outlined text-[1rem]">verified</span>
                     {isSubmitting ? 'Processing...' : 'Approve & Execute'}
                   </button>
                   <button
                     onClick={() => handleAction('REJECTED')}
-                    disabled={isSubmitting}
-                    className="px-3.5 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+                    disabled={isSubmitting || currentUser?.role === 'auditor'}
+                    className={`px-3.5 py-2 rounded-lg text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm ${
+                      currentUser?.role === 'auditor' ? 'bg-slate-400 cursor-not-allowed' : 'bg-rose-600 hover:bg-rose-700'
+                    }`}
                   >
                     <span className="material-symbols-outlined text-[1rem]">cancel</span>
                     {isSubmitting ? 'Processing...' : 'Reject Request'}

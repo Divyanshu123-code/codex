@@ -6,6 +6,7 @@ import { createApp } from '../src/app.js';
 import { runDebugAgent, getDebugHistory } from '../src/engine/debugAgent.js';
 import { routeAction } from '../src/engine/gateway.js';
 import { getSyntheticStorageState } from '../src/tools/protectedTools.js';
+import { authHeader } from './helpers/authHelper.js';
 
 describe('Debug Agent v2: Bounded Closed-Loop Repair', () => {
   let db: any;
@@ -254,13 +255,16 @@ describe('Debug Agent v2: Bounded Closed-Loop Repair', () => {
     const incId = createTestIncident('doc-agent-01');
 
     // GET /api/debug/:incidentId before running
-    const getResBefore = await request(app).get(`/api/debug/${incId}`);
+    const getResBefore = await request(app)
+      .get(`/api/debug/${incId}`)
+      .set(authHeader('admin'));
     expect(getResBefore.status).toBe(200);
     expect(getResBefore.body.runsCount).toBe(0);
 
     // POST /api/debug/:incidentId/run
     const postRes = await request(app)
       .post(`/api/debug/${incId}/run`)
+      .set(authHeader('admin'))
       .send({ actorType: 'human', actorId: 'lead-investigator' });
 
     expect(postRes.status).toBe(200);
@@ -268,7 +272,9 @@ describe('Debug Agent v2: Bounded Closed-Loop Repair', () => {
     expect(postRes.body.attempts.length).toBeGreaterThanOrEqual(1);
 
     // GET /api/debug/:incidentId after running
-    const getResAfter = await request(app).get(`/api/debug/${incId}`);
+    const getResAfter = await request(app)
+      .get(`/api/debug/${incId}`)
+      .set(authHeader('admin'));
     expect(getResAfter.status).toBe(200);
     expect(getResAfter.body.runsCount).toBe(1);
     expect(getResAfter.body.latestRun.status).toBe('VERIFIED_READY_FOR_APPROVAL');

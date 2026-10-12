@@ -1,7 +1,48 @@
 /**
- * Pure deterministic input quality and uncertainty validation engine
- * for defence-domain AI governance (AegisOS Adaptation Plan - Section 5)
+ * Pure deterministic input quality, Admiralty reliability, and uncertainty validation engine
+ * for defence-domain AI governance (AegisOS Defence Enforcement Plan - Section 5 & P5c)
  */
+
+export interface AdmiraltyGrade {
+  sourceReliability: 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
+  informationCredibility: 1 | 2 | 3 | 4 | 5 | 6;
+  raw: string;
+}
+
+export function parseAdmiraltyGrade(raw: any): AdmiraltyGrade | null {
+  if (!raw) return null;
+  if (typeof raw === 'object' && raw.source && raw.credibility) {
+    const s = String(raw.source).toUpperCase();
+    const c = Number(raw.credibility);
+    if (/^[A-F]$/.test(s) && c >= 1 && c <= 6) {
+      return { sourceReliability: s as any, informationCredibility: c as any, raw: `${s}${c}` };
+    }
+  }
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim().toUpperCase();
+    const match = trimmed.match(/^([A-F])([1-6])$/);
+    if (match) {
+      return {
+        sourceReliability: match[1] as any,
+        informationCredibility: Number(match[2]) as any,
+        raw: trimmed
+      };
+    }
+  }
+  return null;
+}
+
+export function isAdmiraltyBelowThreshold(grade: AdmiraltyGrade, thresholdStr = 'C3'): boolean {
+  const thresh = parseAdmiraltyGrade(thresholdStr) || { sourceReliability: 'C', informationCredibility: 3, raw: 'C3' };
+  const reliabilityOrder: Record<string, number> = { A: 1, B: 2, C: 3, D: 4, E: 5, F: 6 };
+  const gradeRel = reliabilityOrder[grade.sourceReliability] ?? 6;
+  const threshRel = reliabilityOrder[thresh.sourceReliability] ?? 3;
+  return gradeRel > threshRel || grade.informationCredibility > thresh.informationCredibility;
+}
+
+export function isAdmiraltyUnreliable(grade: AdmiraltyGrade): boolean {
+  return grade.sourceReliability === 'F' || grade.informationCredibility === 6;
+}
 
 export interface InputRequirementsConfig {
   required_fields?: string[];
@@ -9,6 +50,8 @@ export interface InputRequirementsConfig {
   ranges?: Record<string, { min?: number; max?: number }>;
   require_source_id?: boolean;
   conflict_detection?: boolean;
+  admiralty_threshold?: string; // Default: 'C3'
+  require_admiralty_grade?: boolean;
 }
 
 export interface UncertaintyRuleConfig {
@@ -56,6 +99,13 @@ export interface InputQualityEvaluationResult {
     sourceB: string;
     conflictDescription: string;
   }>;
+  admiraltyResult?: {
+    suppliedGrade?: string;
+    threshold?: string;
+    passed: boolean;
+    unreliable: boolean;
+    details: string;
+  };
 }
 
 /**
@@ -215,7 +265,8 @@ export function evaluateInputQuality(
     });
   }
 
-  // 5. Conflicting Source Detection
+  // 5. Conflicting Source Detection & Admiralty Equal-Grade Check
+  let hasConflictingEqualGrade = false;
   if (requirements?.conflict_detection) {
     const sources = params.sources || params.multi_source_reports || evidenceObj.sources;
     if (Array.isArray(sources) && sources.length >= 2) {
@@ -225,30 +276,44 @@ export function evaluateInputQuality(
           const s2 = sources[j];
 
           // Check opposing claims
+          let hasConflict = false;
+          let conflictDesc = '';
+
           if (s1.status && s2.status && s1.status !== s2.status) {
-            conflictsDetected.push({
-              sourceA: s1.source_id || s1.report_id || `Source-${i + 1}`,
-              sourceB: s2.source_id || s2.report_id || `Source-${j + 1}`,
-              conflictDescription: `Contradictory status detected on target: '${s1.status}' vs '${s2.status}'`
-            });
+            hasConflict = true;
+            conflictDesc = `Contradictory status detected on target: '${s1.status}' vs '${s2.status}'`;
           }
 
           // Check semantic conflict in observation strings (e.g. intact vs destroyed)
-          if (typeof s1.observation === 'string' && typeof s2.observation === 'string') {
+          if (!hasConflict && typeof s1.observation === 'string' && typeof s2.observation === 'string') {
             const obs1 = s1.observation.toLowerCase();
             const obs2 = s2.observation.toLowerCase();
             const hasIntactVsDestroyed =
               (obs1.includes('intact') && obs2.includes('destroyed')) ||
               (obs1.includes('destroyed') && obs2.includes('intact')) ||
               (obs1.includes('open') && obs2.includes('impassable')) ||
-              (obs1.includes('impassable') && obs2.includes('open'));
+              (obs1.includes('impassable') && obs2.includes('open')) ||
+              (obs1.includes('operational') && obs2.includes('compromised')) ||
+              (obs1.includes('compromised') && obs2.includes('operational'));
 
             if (hasIntactVsDestroyed) {
-              conflictsDetected.push({
-                sourceA: s1.source_id || s1.report_id || `Source-${i + 1}`,
-                sourceB: s2.source_id || s2.report_id || `Source-${j + 1}`,
-                conflictDescription: `Conflicting observations on target infrastructure: '${s1.observation}' vs '${s2.observation}'`
-              });
+              hasConflict = true;
+              conflictDesc = `Conflicting observations on target infrastructure: '${s1.observation}' vs '${s2.observation}'`;
+            }
+          }
+
+          if (hasConflict) {
+            conflictsDetected.push({
+              sourceA: s1.source_id || s1.report_id || `Source-${i + 1}`,
+              sourceB: s2.source_id || s2.report_id || `Source-${j + 1}`,
+              conflictDescription: conflictDesc
+            });
+
+            // Check if both sources hold equal Admiralty grade
+            const g1 = parseAdmiraltyGrade(s1.admiralty_grade || s1.grade);
+            const g2 = parseAdmiraltyGrade(s2.admiralty_grade || s2.grade);
+            if (g1 && g2 && g1.raw === g2.raw) {
+              hasConflictingEqualGrade = true;
             }
           }
         }
@@ -259,7 +324,9 @@ export function evaluateInputQuality(
       checks.push({
         name: 'CONFLICTING_EVIDENCE_CHECK',
         passed: false,
-        details: `Identified ${conflictsDetected.length} contradictory claim(s) between multi-source reports`
+        details: `Identified ${conflictsDetected.length} contradictory claim(s) between multi-source reports${
+          hasConflictingEqualGrade ? ' (Conflicting reports carry equal Admiralty grade)' : ''
+        }`
       });
     } else {
       checks.push({
@@ -270,7 +337,60 @@ export function evaluateInputQuality(
     }
   }
 
-  // 6. Evaluate Uncertainty / Model Confidence
+  // 6. Admiralty-Style Source Reliability & Credibility Assessment (P5c)
+  let admiraltyResult: InputQualityEvaluationResult['admiraltyResult'] | undefined;
+  const admiraltyThresholdStr = requirements?.admiralty_threshold || 'C3';
+
+  // Extract Admiralty grade from top-level or from multi-source array
+  const rawGrade = params.admiralty_grade || params.source_grade || params.grade || evidenceObj.admiralty_grade || evidenceObj.grade;
+  const sourcesArr = params.sources || params.multi_source_reports || evidenceObj.sources;
+
+  let evaluatedGrades: AdmiraltyGrade[] = [];
+  if (rawGrade) {
+    const parsed = parseAdmiraltyGrade(rawGrade);
+    if (parsed) evaluatedGrades.push(parsed);
+  } else if (Array.isArray(sourcesArr)) {
+    for (const s of sourcesArr) {
+      const parsed = parseAdmiraltyGrade(s.admiralty_grade || s.grade || s.source_grade);
+      if (parsed) evaluatedGrades.push(parsed);
+    }
+  }
+
+  let hasUnreliableAdmiralty = false;
+  let hasBelowThresholdAdmiralty = false;
+
+  if (evaluatedGrades.length > 0) {
+    for (const g of evaluatedGrades) {
+      if (isAdmiraltyUnreliable(g)) {
+        hasUnreliableAdmiralty = true;
+      } else if (isAdmiraltyBelowThreshold(g, admiraltyThresholdStr)) {
+        hasBelowThresholdAdmiralty = true;
+      }
+    }
+
+    const firstGrade = evaluatedGrades[0];
+    const isPass = !hasUnreliableAdmiralty && !hasBelowThresholdAdmiralty;
+
+    admiraltyResult = {
+      suppliedGrade: firstGrade.raw,
+      threshold: admiraltyThresholdStr,
+      passed: isPass,
+      unreliable: hasUnreliableAdmiralty,
+      details: hasUnreliableAdmiralty
+        ? `Admiralty grade ${firstGrade.raw} is unreliable or cannot be judged (F/6 prohibited)`
+        : hasBelowThresholdAdmiralty
+        ? `Admiralty grade ${firstGrade.raw} is below configured threshold of ${admiraltyThresholdStr}`
+        : `Admiralty grade ${firstGrade.raw} satisfies intelligence threshold (${admiraltyThresholdStr})`
+    };
+
+    checks.push({
+      name: 'ADMIRALTY_RELIABILITY_ASSESSMENT',
+      passed: isPass,
+      details: admiraltyResult.details
+    });
+  }
+
+  // 7. Evaluate Uncertainty / Model Confidence
   let uncertaintyResult: InputQualityEvaluationResult['uncertaintyResult'] | undefined;
   if (uncertaintyRule && (uncertaintyRule.metric || uncertaintyRule.minimum_threshold !== undefined)) {
     const metricName = uncertaintyRule.metric || 'confidence';
@@ -316,7 +436,8 @@ export function evaluateInputQuality(
     }
   }
 
-  // Determine Overall Decision Override based on Failures
+  // Determine Overall Decision Override based on Strict Defence Precedence
+  // A. Missing required fields -> BLOCK
   if (missingFields.length > 0) {
     return {
       valid: false,
@@ -328,10 +449,12 @@ export function evaluateInputQuality(
       freshnessResult,
       rangeViolations,
       uncertaintyResult,
-      conflictsDetected
+      conflictsDetected,
+      admiraltyResult
     };
   }
 
+  // B. Physical bounds out of range -> BLOCK
   if (rangeViolations.length > 0) {
     return {
       valid: false,
@@ -343,25 +466,80 @@ export function evaluateInputQuality(
       freshnessResult,
       rangeViolations,
       uncertaintyResult,
-      conflictsDetected
+      conflictsDetected,
+      admiraltyResult
     };
   }
 
-  if (freshnessResult && !freshnessResult.isFresh) {
+  // C. Unreliable Admiralty grade (F or 6) -> BLOCK (P5c requirement)
+  if (hasUnreliableAdmiralty) {
     return {
       valid: false,
-      decisionOverride: 'REQUIRE_APPROVAL',
-      reasonCode: 'STALE_TELEMETRY_HELD_FOR_HUMAN',
-      explanation: `Telemetry is stale (${freshnessResult.ageSeconds}s old; maximum permitted is ${freshnessResult.maxAgeSeconds}s). Held for human review.`,
+      decisionOverride: 'BLOCK',
+      reasonCode: 'ADMIRALTY_UNRELIABLE_SOURCE_BLOCKED',
+      explanation: `Admiralty intelligence rating indicates unverified or unreliable source/credibility. Automated recommendation blocked.`,
       checks,
       missingFields,
       freshnessResult,
       rangeViolations,
       uncertaintyResult,
-      conflictsDetected
+      conflictsDetected,
+      admiraltyResult
     };
   }
 
+  // D. Stale telemetry (Fail-safe posture: default to HOLD / REQUIRE_APPROVAL, never ALLOW)
+  if (freshnessResult && !freshnessResult.isFresh) {
+    return {
+      valid: false,
+      decisionOverride: 'REQUIRE_APPROVAL',
+      reasonCode: 'STALE_TELEMETRY_HELD_FOR_HUMAN',
+      explanation: `Telemetry is stale (${freshnessResult.ageSeconds}s old; maximum permitted is ${freshnessResult.maxAgeSeconds}s). Safe-hold activated; human clearance required.`,
+      checks,
+      missingFields,
+      freshnessResult,
+      rangeViolations,
+      uncertaintyResult,
+      conflictsDetected,
+      admiraltyResult
+    };
+  }
+
+  // E. Conflicting reports with equal Admiralty grades -> REQUIRE_APPROVAL (P5c requirement)
+  if (hasConflictingEqualGrade) {
+    return {
+      valid: false,
+      decisionOverride: 'REQUIRE_APPROVAL',
+      reasonCode: 'CONFLICTING_INTELLIGENCE_EQUAL_GRADE_HELD',
+      explanation: `Two contradictory intelligence reports with equal Admiralty grade detected (${conflictsDetected[0].conflictDescription}). Held for human commander resolution.`,
+      checks,
+      missingFields,
+      freshnessResult,
+      rangeViolations,
+      uncertaintyResult,
+      conflictsDetected,
+      admiraltyResult
+    };
+  }
+
+  // F. Admiralty grade below threshold -> REQUIRE_APPROVAL (P5c requirement)
+  if (hasBelowThresholdAdmiralty) {
+    return {
+      valid: false,
+      decisionOverride: 'REQUIRE_APPROVAL',
+      reasonCode: 'ADMIRALTY_CONFIDENCE_BELOW_THRESHOLD_HELD_FOR_HUMAN',
+      explanation: `Admiralty intelligence grade is below minimum acceptable threshold of ${admiraltyThresholdStr}. Held for human review.`,
+      checks,
+      missingFields,
+      freshnessResult,
+      rangeViolations,
+      uncertaintyResult,
+      conflictsDetected,
+      admiraltyResult
+    };
+  }
+
+  // G. Standard conflicting evidence -> REQUIRE_APPROVAL
   if (conflictsDetected.length > 0) {
     return {
       valid: false,
@@ -373,10 +551,12 @@ export function evaluateInputQuality(
       freshnessResult,
       rangeViolations,
       uncertaintyResult,
-      conflictsDetected
+      conflictsDetected,
+      admiraltyResult
     };
   }
 
+  // H. Model uncertainty below threshold
   if (uncertaintyResult && !uncertaintyResult.passed) {
     const override = uncertaintyRule?.on_below_threshold || 'REQUIRE_APPROVAL';
     const reason = uncertaintyResult.suppliedValue === undefined
@@ -392,7 +572,8 @@ export function evaluateInputQuality(
       freshnessResult,
       rangeViolations,
       uncertaintyResult,
-      conflictsDetected
+      conflictsDetected,
+      admiraltyResult
     };
   }
 
@@ -404,6 +585,7 @@ export function evaluateInputQuality(
     freshnessResult,
     rangeViolations,
     uncertaintyResult,
-    conflictsDetected
+    conflictsDetected,
+    admiraltyResult
   };
 }

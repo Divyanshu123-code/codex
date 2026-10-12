@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { Task, Agent } from '../types';
-import { parseJsonSafe } from '../utils';
+import { parseJsonSafe, formatSafeTime, formatSafeDateTime } from '../utils';
 
 interface TasksViewProps {
   tasks: Task[];
@@ -233,7 +233,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                         </span>
                       </td>
                       <td className="py-3 px-3 text-right font-mono text-[0.6875rem] text-slate-400">
-                        {new Date(task.created_at).toLocaleTimeString()}
+                        {formatSafeTime(task.created_at)}
                       </td>
                     </tr>
                   );
@@ -289,7 +289,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Created At:</span>
-                <span className="font-mono text-slate-600">{new Date(selectedTask.created_at).toLocaleString()}</span>
+                <span className="font-mono text-slate-600">{formatSafeDateTime(selectedTask.created_at)}</span>
               </div>
             </div>
 

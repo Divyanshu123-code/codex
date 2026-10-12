@@ -1,5 +1,6 @@
 import React from 'react';
 import type { Agent, Approval, Incident, AuditEvent, DashboardData, Tab } from '../types';
+import { formatSafeTime } from '../utils';
 
 interface OverviewViewProps {
   agents: Agent[];
@@ -63,6 +64,22 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             Deterministic Gate v2.4.1 Active
           </span>
         </div>
+      </div>
+
+      {/* Synthetic Data Disclaimer Banner */}
+      <div className="bg-amber-50/80 border-l-4 border-amber-500 p-3 rounded-r-xl shadow-xs flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <span className="material-symbols-outlined text-amber-600 text-lg">shield</span>
+          <span className="text-xs font-mono font-bold text-amber-900 tracking-wide uppercase">
+            DEMO ENVIRONMENT - SYNTHETIC, NON-OPERATIONAL DATA
+          </span>
+          <span className="text-xs text-amber-700 hidden md:inline">
+            All enclaves, orders, sensor reports, and telemetry are synthetically simulated for exercise evaluation.
+          </span>
+        </div>
+        <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300">
+          UNCLASSIFIED//EXERCISE
+        </span>
       </div>
 
       {/* Summary Stat Cards (including Human Decisions Overturned, Reopen Requests & Cumulative Breaches) */}
@@ -496,6 +513,66 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
 
       </div>
 
+      {/* Defence Governance Mapping Section */}
+      <section className="rounded-xl bg-slate-900 text-white border border-slate-800 shadow-lg p-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-800 gap-2">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-indigo-400 text-xl">military_tech</span>
+              <h2 className="text-base font-bold text-white tracking-tight">Defence Governance Mapping</h2>
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                Doctrinal Framework Alignment
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 mt-1">
+              How AegisOS maps deterministic software enforcement primitives to defense AI governance standards (supports NATO, UK MOD, DoD Ethical AI principles).
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+          <div className="bg-slate-800/60 rounded-lg p-3.5 border border-slate-700/60">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-indigo-300">Responsible Control</span>
+              <span className="text-[10px] font-mono text-slate-400">NATO P1 / DoD</span>
+            </div>
+            <p className="text-[11px] text-slate-300 leading-relaxed">
+              Two-Person Integrity required on critical containment actions (<code className="text-amber-300">isolate_host</code>, <code className="text-amber-300">wipe_credentials</code>). Same user duplicate clearance blocked.
+            </p>
+          </div>
+
+          <div className="bg-slate-800/60 rounded-lg p-3.5 border border-slate-700/60">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-emerald-300">Delegation Matrix</span>
+              <span className="text-[10px] font-mono text-slate-400">UK MOD Strategy</span>
+            </div>
+            <p className="text-[11px] text-slate-300 leading-relaxed">
+              Tiered authorization: Level 1 Duty Officer approves up to 15,000 credits. Requisitions exceeding threshold require Level 2 Commander elevation.
+            </p>
+          </div>
+
+          <div className="bg-slate-800/60 rounded-lg p-3.5 border border-slate-700/60">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-cyan-300">Intelligence Grading</span>
+              <span className="text-[10px] font-mono text-slate-400">STANAG 2198 (A1-F6)</span>
+            </div>
+            <p className="text-[11px] text-slate-300 leading-relaxed">
+              Admiralty grading gating: F/6 unverified sources strictly blocked. Below C3 or conflicting equal-grade sensor reports held for human review.
+            </p>
+          </div>
+
+          <div className="bg-slate-800/60 rounded-lg p-3.5 border border-slate-700/60">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-amber-300">Fail-Safe & Traceability</span>
+              <span className="text-[10px] font-mono text-slate-400">DoD Traceable</span>
+            </div>
+            <p className="text-[11px] text-slate-300 leading-relaxed">
+              Cryptographically chained audit ledger (HMAC-SHA256). Stale telemetry (&gt;300s) triggers automatic fail-safe hold. 12-section After-Action Reports (AAR).
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* Recent Governance Activity Log */}
       <section className="rounded-xl bg-white border border-slate-200 shadow-sm p-4 flex flex-col">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-200 gap-2">
@@ -552,7 +629,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                   </td>
                   <td className="py-3 font-mono text-slate-400 text-[0.6875rem]">{evt.id.substring(0, 16)}...</td>
                   <td className="py-3 text-right text-slate-500 font-mono text-[0.6875rem]">
-                    {new Date(evt.timestamp).toLocaleTimeString()}
+                    {formatSafeTime(evt.timestamp)}
                   </td>
                 </tr>
               ))}

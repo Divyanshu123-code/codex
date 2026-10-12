@@ -1,8 +1,8 @@
 import { DatabaseSync } from 'node:sqlite';
-import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
 import { getDatabase } from './connection.js';
 import { initializeSchema } from './schema.js';
+import { hashPassword } from '../auth/crypto.js';
 
 export function seedDatabase(db?: DatabaseSync): void {
   const targetDb = db || getDatabase();
@@ -27,7 +27,10 @@ export function seedDatabase(db?: DatabaseSync): void {
 
   initializeSchema(targetDb);
 
-  const passwordHash = bcrypt.hashSync('password123', 8);
+  // Requirement 2: Seeded demo users get documented demo passwords only when DEMO_MODE=true
+  const isDemo = process.env.DEMO_MODE === 'true';
+  const defaultPassword = isDemo ? 'password123' : crypto.randomBytes(32).toString('hex');
+  const passwordHash = hashPassword(defaultPassword);
   const now = Date.now();
 
   // 1. Seed Users
@@ -59,7 +62,7 @@ export function seedDatabase(db?: DatabaseSync): void {
   insertOp.run('propose_tactical_recommendation', 'Formulate tactical recommendation for human commander review', 0, 1, 0.08);
   insertOp.run('wipe_credentials', 'Prohibited destruction of authentication credentials', 1, 1, 0.50);
   insertOp.run('purge_security_logs', 'Prohibited deletion of boundary security event logs', 1, 1, 0.50);
-  insertOp.run('issue_refund', 'Issue customer refund to order payment source within threshold', 1, 1, 0.05);
+  insertOp.run('issue_refund', 'Approve logistics spares requisition within authorized threshold', 1, 1, 0.05);
 
   // 3. Seed Task Types
   const insertTaskType = targetDb.prepare(`
@@ -220,8 +223,8 @@ export function seedDatabase(db?: DatabaseSync): void {
   insertPolicy.run('POL-RECON-READ', 'v1.0', 'Allow Reconnaissance Report Reads', 'agent-decision-support-03', 'read_recon_report', 'synthetic://recon/*', 'allow', 'low', 0, 0, null, null, null, now);
   insertPolicy.run('POL-RECON-RECOMMEND', 'v1.0', 'Require Commander Approval for Tactical Recommendations', 'agent-decision-support-03', 'propose_tactical_recommendation', 'synthetic://briefings/*', 'require_approval', 'high', 0, 0, null, null, null, now);
 
-  // Financial Threshold Policy (Section 6c: Auto-grant <= $5,000, elevate > $5,000; rolling cap $5,000/24h)
-  insertPolicy.run('POL-REFUND-01', 'v1.0', 'Delegated Customer Refund Authority Threshold ($5,000 Auto-Grant, $5,000/24h Rolling Cap)', 'agent-finance-refund-04', 'issue_refund', 'synthetic://orders/*', 'allow', 'medium', 0, 0, 5000.0, 5000.0, 1440, now);
+  // Logistics Spares Requisition Authority Policy (P5b/P5c)
+  insertPolicy.run('POL-REFUND-01', 'v1.0', 'Logistics Spares Requisition Authority (Auto-approve up to 5,000 per requisition and 8,000 per 24h; above that needs commander approval)', 'agent-finance-refund-04', 'issue_refund', 'synthetic://orders/*', 'allow', 'medium', 0, 0, 5000.0, 8000.0, 1440, now);
 
   // 5. Seed Agents
   const faultyWorkflow = [
@@ -423,16 +426,16 @@ export function seedDatabase(db?: DatabaseSync): void {
     now
   );
 
-  // Financial Refund Agent (Section 6b/6c)
+  // Logistics Requisition Agent (P5b/P5c)
   insertAgent.run(
     'agent-finance-refund-04',
-    'Customer Reconciliation & Refund Agent',
+    'Logistics Requisition Agent',
     'financial_operations',
     'agnt_live_finance_refund_04',
     'usr-admin',
-    'Finance Operations & Compliance',
-    'Finance Operations & Compliance',
-    'Autonomous customer refund processing and order reconciliation with strict $5,000 auto-approval ceiling and dual-custody elevation.',
+    'Joint Logistics & Supply Command',
+    'Joint Logistics & Supply Command',
+    'Autonomous logistics spares requisition authority with strict 5,000 auto-approval ceiling and dual-custody commander elevation.',
     'medium',
     'MODERATE (TIER 2)',
     JSON.stringify(['issue_refund', 'read_file']),

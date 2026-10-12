@@ -34,6 +34,7 @@ actionsRouter.post('/evaluate', (req: Request, res: Response) => {
       status: agentRow.status,
       allowed_operations: JSON.parse(agentRow.allowed_operations),
       allowed_resources: JSON.parse(agentRow.allowed_resources),
+      permitted_data_scopes: agentRow.permitted_data_scopes ? JSON.parse(agentRow.permitted_data_scopes) : undefined,
       policy_version: agentRow.policy_version,
       input_requirements: agentRow.input_requirements ? JSON.parse(agentRow.input_requirements) : {},
       uncertainty_rule: agentRow.uncertainty_rule ? JSON.parse(agentRow.uncertainty_rule) : {}

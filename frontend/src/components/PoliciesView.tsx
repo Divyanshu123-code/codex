@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { Policy } from '../types';
+import { formatSafeDateTime } from '../utils';
 
 interface PoliciesViewProps {
   policies: Policy[];
@@ -260,7 +261,7 @@ export const PoliciesView: React.FC<PoliciesViewProps> = ({ policies }) => {
 
             {/* Audit Metadata */}
             <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[0.6875rem] text-slate-400 font-mono">
-              <span>Created: {new Date(selectedPolicy.created_at).toLocaleString()}</span>
+              <span>Created: {formatSafeDateTime(selectedPolicy.created_at)}</span>
               <span>Audit Chain Linked</span>
             </div>
 

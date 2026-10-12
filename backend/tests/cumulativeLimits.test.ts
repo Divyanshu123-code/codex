@@ -1,15 +1,18 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import request from 'supertest';
+import supertest from 'supertest';
 import { createApp } from '../src/app.js';
 import { seedDatabase } from '../src/db/seed.js';
 import { resetSyntheticStorage, getSyntheticStorageState } from '../src/tools/protectedTools.js';
 import { getDatabase } from '../src/db/connection.js';
 import { evaluatePolicy } from '../src/engine/evaluator.js';
+import { createAuthedAgent } from './helpers/authHelper.js';
+
+const request = (appInstance: any) => createAuthedAgent(appInstance, 'admin');
 
 describe('P4: Cumulative / Velocity Limits & Split-Refund Evasion (Claims C1-C4, Section 6c)', () => {
   const app = createApp();
 
   beforeEach(() => {
+    process.env.DEMO_MODE = 'true';
     seedDatabase();
     resetSyntheticStorage();
   });
@@ -36,10 +39,10 @@ describe('P4: Cumulative / Velocity Limits & Split-Refund Evasion (Claims C1-C4,
     expect(Object.keys(storage.refunds).length).toBe(1);
   });
 
-  it('2. Split-refund evasion: splitting $6,000 into multiple $2,000 requests is caught by cumulative cap', async () => {
+  it('2. Split-refund evasion: splitting $9,000 into multiple $3,000 requests is caught by cumulative cap', async () => {
     const db = getDatabase();
 
-    // Request 1: $2,000 refund (Total: $2,000 <= $5,000 daily cap) -> ALLOW
+    // Request 1: $3,000 refund (Total: $3,000 <= $8,000 daily cap) -> ALLOW
     const res1 = await request(app)
       .post('/api/actions/route')
       .send({
@@ -47,13 +50,13 @@ describe('P4: Cumulative / Velocity Limits & Split-Refund Evasion (Claims C1-C4,
         tool: 'refund_engine',
         operation: 'issue_refund',
         resource: 'synthetic://orders/ord-split-1',
-        parameters: { order_id: 'ord-split-1', amount: 2000 }
+        parameters: { order_id: 'ord-split-1', amount: 3000 }
       });
     expect(res1.status).toBe(200);
     expect(res1.body.gateDecision).toBe('ALLOW');
     expect(res1.body.executionStatus).toBe('SUCCEEDED');
 
-    // Request 2: $2,000 refund (Total: $4,000 <= $5,000 daily cap) -> ALLOW
+    // Request 2: $3,000 refund (Total: $6,000 <= $8,000 daily cap) -> ALLOW
     const res2 = await request(app)
       .post('/api/actions/route')
       .send({
@@ -61,17 +64,17 @@ describe('P4: Cumulative / Velocity Limits & Split-Refund Evasion (Claims C1-C4,
         tool: 'refund_engine',
         operation: 'issue_refund',
         resource: 'synthetic://orders/ord-split-2',
-        parameters: { order_id: 'ord-split-2', amount: 2000 }
+        parameters: { order_id: 'ord-split-2', amount: 3000 }
       });
     expect(res2.status).toBe(200);
     expect(res2.body.gateDecision).toBe('ALLOW');
     expect(res2.body.executionStatus).toBe('SUCCEEDED');
 
-    // Synthetic storage now has exactly $4,000 refunded
+    // Synthetic storage now has exactly $6,000 refunded
     const storageBeforeBreach = getSyntheticStorageState();
     expect(Object.keys(storageBeforeBreach.refunds).length).toBe(2);
 
-    // Request 3: $2,000 refund (Total would become $6,000 > $5,000 daily cap)
+    // Request 3: $3,000 refund (Total would become $9,000 > $8,000 daily cap)
     // MUST NOT bypass the threshold: caught and elevated to human approval
     const res3 = await request(app)
       .post('/api/actions/route')
@@ -80,24 +83,24 @@ describe('P4: Cumulative / Velocity Limits & Split-Refund Evasion (Claims C1-C4,
         tool: 'refund_engine',
         operation: 'issue_refund',
         resource: 'synthetic://orders/ord-split-3',
-        parameters: { order_id: 'ord-split-3', amount: 2000 }
+        parameters: { order_id: 'ord-split-3', amount: 3000 }
       });
 
     expect(res3.status).toBe(200);
     expect(res3.body.gateDecision).toBe('REQUIRE_APPROVAL');
     expect(res3.body.gateReasonCode).toBe('CUMULATIVE_LIMIT_EXCEEDED_HELD_FOR_HUMAN');
     expect(res3.body.executionStatus).toBe('NOT_EXECUTED');
-    expect(res3.body.explanation).toContain('cumulative total to $6000, exceeding daily cap of $5000');
+    expect(res3.body.explanation).toContain('cumulative total to $9000, exceeding daily cap of $8000');
 
-    // Invariant G1: Zero tool side-effects while held. Storage still only has $4,000
+    // Invariant G1: Zero tool side-effects while held. Storage still only has $6,000
     const storageAfterBreach = getSyntheticStorageState();
     expect(Object.keys(storageAfterBreach.refunds).length).toBe(2);
 
     // Immutable backup record created in scenario_backups
     const backupRow = db.prepare('SELECT * FROM scenario_backups WHERE request_id = ?').get(res3.body.requestId) as any;
     expect(backupRow).toBeDefined();
-    expect(backupRow.amount).toBe(2000);
-    expect(backupRow.policy_limit).toBe(5000);
+    expect(backupRow.amount).toBe(3000);
+    expect(backupRow.policy_limit).toBe(8000);
     expect(backupRow.reason_code).toBe('CUMULATIVE_LIMIT_EXCEEDED_HELD_FOR_HUMAN');
     expect(backupRow.decision).toBe('REQUIRE_APPROVAL');
     expect(backupRow.execution_status).toBe('NOT_EXECUTED');
@@ -113,20 +116,33 @@ describe('P4: Cumulative / Velocity Limits & Split-Refund Evasion (Claims C1-C4,
   });
 
   it('3. Blocked and held actions do NOT count toward the cumulative total', async () => {
-    // 1. Issue $4,000 refund (ALLOW -> SUCCEEDED)
+    // 1. Issue $5,000 refund (ALLOW -> SUCCEEDED)
     const res1 = await request(app)
       .post('/api/actions/route')
       .send({
         agentId: 'agent-finance-refund-04',
         tool: 'refund_engine',
         operation: 'issue_refund',
-        resource: 'synthetic://orders/ord-base-4000',
-        parameters: { order_id: 'ord-base-4000', amount: 4000 }
+        resource: 'synthetic://orders/ord-base-5000',
+        parameters: { order_id: 'ord-base-5000', amount: 5000 }
       });
     expect(res1.body.gateDecision).toBe('ALLOW');
     expect(res1.body.executionStatus).toBe('SUCCEEDED');
 
-    // 2. Propose $2,000 refund -> Held due to cumulative breach ($4,000 + $2,000 = $6,000 > $5,000)
+    // 2. Issue $2,000 refund (ALLOW -> SUCCEEDED, total = $7,000 <= $8,000)
+    const res2 = await request(app)
+      .post('/api/actions/route')
+      .send({
+        agentId: 'agent-finance-refund-04',
+        tool: 'refund_engine',
+        operation: 'issue_refund',
+        resource: 'synthetic://orders/ord-base-2000',
+        parameters: { order_id: 'ord-base-2000', amount: 2000 }
+      });
+    expect(res2.body.gateDecision).toBe('ALLOW');
+    expect(res2.body.executionStatus).toBe('SUCCEEDED');
+
+    // 3. Propose $2,000 refund -> Held due to cumulative breach ($7,000 + $2,000 = $9,000 > $8,000)
     const resHeld = await request(app)
       .post('/api/actions/route')
       .send({
@@ -140,11 +156,11 @@ describe('P4: Cumulative / Velocity Limits & Split-Refund Evasion (Claims C1-C4,
     expect(resHeld.body.gateReasonCode).toBe('CUMULATIVE_LIMIT_EXCEEDED_HELD_FOR_HUMAN');
     expect(resHeld.body.executionStatus).toBe('NOT_EXECUTED');
 
-    // 3. Propose $1,000 refund:
-    // If the held $2,000 had counted, total would be $4,000 + $2,000 + $1,000 = $7,000 (breach).
-    // Because held actions do NOT count, current succeeded cumulative is still $4,000.
-    // $4,000 + $1,000 = $5,000 <= $5,000 cap -> ALLOW!
-    const res2 = await request(app)
+    // 4. Propose $1,000 refund:
+    // If the held $2,000 had counted, total would be $7,000 + $2,000 + $1,000 = $10,000 (breach).
+    // Because held actions do NOT count, current succeeded cumulative is still $7,000.
+    // $7,000 + $1,000 = $8,000 <= $8,000 cap -> ALLOW!
+    const resFitting = await request(app)
       .post('/api/actions/route')
       .send({
         agentId: 'agent-finance-refund-04',
@@ -153,10 +169,10 @@ describe('P4: Cumulative / Velocity Limits & Split-Refund Evasion (Claims C1-C4,
         resource: 'synthetic://orders/ord-fitting-1000',
         parameters: { order_id: 'ord-fitting-1000', amount: 1000 }
       });
-    expect(res2.body.gateDecision).toBe('ALLOW');
-    expect(res2.body.executionStatus).toBe('SUCCEEDED');
+    expect(resFitting.body.gateDecision).toBe('ALLOW');
+    expect(resFitting.body.executionStatus).toBe('SUCCEEDED');
 
-    // 4. Now executed cumulative total is exactly $5,000 ($4,000 + $1,000).
+    // 5. Now executed cumulative total is exactly $8,000 ($5,000 + $2,000 + $1,000).
     // Any subsequent $1 refund must be held:
     const resBreach = await request(app)
       .post('/api/actions/route')
@@ -174,7 +190,7 @@ describe('P4: Cumulative / Velocity Limits & Split-Refund Evasion (Claims C1-C4,
   it('4. Rolling window expiry resets the cumulative allowance', async () => {
     const db = getDatabase();
 
-    // 1. Issue $5,000 refund (fills the daily cap completely)
+    // 1. Issue $5,000 and $3,000 refunds (fills the $8,000 daily cap completely)
     const res1 = await request(app)
       .post('/api/actions/route')
       .send({
@@ -187,8 +203,20 @@ describe('P4: Cumulative / Velocity Limits & Split-Refund Evasion (Claims C1-C4,
     expect(res1.body.gateDecision).toBe('ALLOW');
     expect(res1.body.executionStatus).toBe('SUCCEEDED');
 
-    // 2. Immediate second refund of $1,000 is held (cumulative breach: $5,000 + $1,000 = $6,000 > $5,000)
     const res2 = await request(app)
+      .post('/api/actions/route')
+      .send({
+        agentId: 'agent-finance-refund-04',
+        tool: 'refund_engine',
+        operation: 'issue_refund',
+        resource: 'synthetic://orders/ord-full-3000',
+        parameters: { order_id: 'ord-full-3000', amount: 3000 }
+      });
+    expect(res2.body.gateDecision).toBe('ALLOW');
+    expect(res2.body.executionStatus).toBe('SUCCEEDED');
+
+    // 2. Immediate third refund of $1,000 is held (cumulative breach: $8,000 + $1,000 = $9,000 > $8,000)
+    const resFail = await request(app)
       .post('/api/actions/route')
       .send({
         agentId: 'agent-finance-refund-04',
@@ -197,30 +225,29 @@ describe('P4: Cumulative / Velocity Limits & Split-Refund Evasion (Claims C1-C4,
         resource: 'synthetic://orders/ord-fail-1000',
         parameters: { order_id: 'ord-fail-1000', amount: 1000 }
       });
-    expect(res2.body.gateDecision).toBe('REQUIRE_APPROVAL');
-    expect(res2.body.gateReasonCode).toBe('CUMULATIVE_LIMIT_EXCEEDED_HELD_FOR_HUMAN');
+    expect(resFail.body.gateDecision).toBe('REQUIRE_APPROVAL');
+    expect(resFail.body.gateReasonCode).toBe('CUMULATIVE_LIMIT_EXCEEDED_HELD_FOR_HUMAN');
 
-    // 3. Simulate rolling window passage: backdate the first execution to 25 hours ago (1500m > 1440m window)
+    // 3. Simulate rolling window passage: backdate both executions to 25 hours ago (1500m > 1440m window)
     const twentyFiveHoursAgo = Date.now() - (25 * 60 * 60 * 1000);
-    db.prepare(`
-      UPDATE executions SET created_at = ? WHERE request_id = ?
-    `).run(twentyFiveHoursAgo, res1.body.requestId);
+    db.prepare(`UPDATE executions SET created_at = ? WHERE request_id = ?`).run(twentyFiveHoursAgo, res1.body.requestId);
+    db.prepare(`UPDATE executions SET created_at = ? WHERE request_id = ?`).run(twentyFiveHoursAgo, res2.body.requestId);
 
-    // 4. Now that window has expired, a new $3,000 refund resets allowance and proceeds
+    // 4. Now that window has expired, a new $4,000 refund resets allowance and proceeds
     const res3 = await request(app)
       .post('/api/actions/route')
       .send({
         agentId: 'agent-finance-refund-04',
         tool: 'refund_engine',
         operation: 'issue_refund',
-        resource: 'synthetic://orders/ord-post-window-3000',
-        parameters: { order_id: 'ord-post-window-3000', amount: 3000 }
+        resource: 'synthetic://orders/ord-post-window-4000',
+        parameters: { order_id: 'ord-post-window-4000', amount: 4000 }
       });
 
     expect(res3.status).toBe(200);
     expect(res3.body.gateDecision).toBe('ALLOW');
     expect(res3.body.executionStatus).toBe('SUCCEEDED');
-    expect(res3.body.result.amount).toBe(3000);
+    expect(res3.body.result.amount).toBe(4000);
   });
 
   it('5. Evaluator function is pure, deterministic, and side-effect free', () => {
@@ -292,7 +319,7 @@ describe('P4: Cumulative / Velocity Limits & Split-Refund Evasion (Claims C1-C4,
   });
 
   it('6. Leadership Dashboard tracks cumulativeLimitBreaches counter', async () => {
-    // 1. Issue $4,000 refund
+    // 1. Issue $5,000 refund
     await request(app)
       .post('/api/actions/route')
       .send({
@@ -300,10 +327,10 @@ describe('P4: Cumulative / Velocity Limits & Split-Refund Evasion (Claims C1-C4,
         tool: 'refund_engine',
         operation: 'issue_refund',
         resource: 'synthetic://orders/ord-dash-1',
-        parameters: { order_id: 'ord-dash-1', amount: 4000 }
+        parameters: { order_id: 'ord-dash-1', amount: 5000 }
       });
 
-    // 2. Trigger cumulative breach with $2,000 refund
+    // 2. Trigger cumulative breach with $4,000 refund ($5,000 + $4,000 = $9,000 > $8,000)
     await request(app)
       .post('/api/actions/route')
       .send({
@@ -311,7 +338,7 @@ describe('P4: Cumulative / Velocity Limits & Split-Refund Evasion (Claims C1-C4,
         tool: 'refund_engine',
         operation: 'issue_refund',
         resource: 'synthetic://orders/ord-dash-2',
-        parameters: { order_id: 'ord-dash-2', amount: 2000 }
+        parameters: { order_id: 'ord-dash-2', amount: 4000 }
       });
 
     // 3. Query Leadership Dashboard
@@ -322,7 +349,7 @@ describe('P4: Cumulative / Velocity Limits & Split-Refund Evasion (Claims C1-C4,
   });
 
   it('7. Race condition prevention: concurrent requests (Promise.all) evaluate atomically and exactly one succeeds', async () => {
-    // Fire two $3,000 refund requests simultaneously against the $5,000 daily cap
+    // Fire two $5,000 refund requests simultaneously against the $8,000 daily cap ($5,000 + $5,000 = $10,000 > $8,000)
     const [resA, resB] = await Promise.all([
       request(app)
         .post('/api/actions/route')
@@ -331,7 +358,7 @@ describe('P4: Cumulative / Velocity Limits & Split-Refund Evasion (Claims C1-C4,
           tool: 'refund_engine',
           operation: 'issue_refund',
           resource: 'synthetic://orders/ord-race-1',
-          parameters: { order_id: 'ord-race-1', amount: 3000 }
+          parameters: { order_id: 'ord-race-1', amount: 5000 }
         }),
       request(app)
         .post('/api/actions/route')
@@ -340,7 +367,7 @@ describe('P4: Cumulative / Velocity Limits & Split-Refund Evasion (Claims C1-C4,
           tool: 'refund_engine',
           operation: 'issue_refund',
           resource: 'synthetic://orders/ord-race-2',
-          parameters: { order_id: 'ord-race-2', amount: 3000 }
+          parameters: { order_id: 'ord-race-2', amount: 5000 }
         })
     ]);
 
@@ -361,27 +388,27 @@ describe('P4: Cumulative / Velocity Limits & Split-Refund Evasion (Claims C1-C4,
   });
 
   it('8. Approval path: A held cumulative breach approved by a human executes once without re-triggering cumulative hold', async () => {
-    // Pre-fill $4,000 allowance
+    // Pre-fill $5,000 allowance
     const resBase = await request(app)
       .post('/api/actions/route')
       .send({
         agentId: 'agent-finance-refund-04',
         tool: 'refund_engine',
         operation: 'issue_refund',
-        resource: 'synthetic://orders/ord-pre-4000',
-        parameters: { order_id: 'ord-pre-4000', amount: 4000 }
+        resource: 'synthetic://orders/ord-pre-5000',
+        parameters: { order_id: 'ord-pre-5000', amount: 5000 }
       });
     expect(resBase.body.gateDecision).toBe('ALLOW');
 
-    // Cause breach with $2,000 refund ($4,000 + $2,000 = $6,000 > $5,000) -> Held
+    // Cause breach with $4,000 refund ($5,000 + $4,000 = $9,000 > $8,000) -> Held
     const resBreach = await request(app)
       .post('/api/actions/route')
       .send({
         agentId: 'agent-finance-refund-04',
         tool: 'refund_engine',
         operation: 'issue_refund',
-        resource: 'synthetic://orders/ord-breach-2000',
-        parameters: { order_id: 'ord-breach-2000', amount: 2000 }
+        resource: 'synthetic://orders/ord-breach-4000',
+        parameters: { order_id: 'ord-breach-4000', amount: 4000 }
       });
     expect(resBreach.body.gateDecision).toBe('REQUIRE_APPROVAL');
     expect(resBreach.body.approvalStatus).toBe('PENDING');
@@ -404,7 +431,7 @@ describe('P4: Cumulative / Velocity Limits & Split-Refund Evasion (Claims C1-C4,
     expect(approveRes.body.executionStatus).toBe('SUCCEEDED');
     expect(approveRes.body.result).toBeDefined();
     expect(approveRes.body.result.status).toBe('REFUND_EXECUTED');
-    expect(approveRes.body.result.amount).toBe(2000);
+    expect(approveRes.body.result.amount).toBe(4000);
 
     // Verify execution ledger has both refunds and was not blocked during revalidation
     const storage = getSyntheticStorageState();
@@ -414,7 +441,7 @@ describe('P4: Cumulative / Velocity Limits & Split-Refund Evasion (Claims C1-C4,
   it('9. Intended Design: Once an approved $6,000 refund succeeds, it counts toward the rolling window, holding all subsequent refunds until window expiry', async () => {
     const db = getDatabase();
 
-    // 1. Propose a single $6,000 refund (exceeds single threshold $5,000 & cap) -> Held
+    // 1. Propose a single $6,000 refund (exceeds single threshold $5,000) -> Held
     const res6000 = await request(app)
       .post('/api/actions/route')
       .send({
@@ -441,21 +468,21 @@ describe('P4: Cumulative / Velocity Limits & Split-Refund Evasion (Claims C1-C4,
 
     // 3. INTENDED BEHAVIOR SPECIFICATION:
     // The approved $6,000 refund has executed (money left the account).
-    // Therefore, it counts toward the active 24h rolling window (cumulative total = $6,000 >= $5,000 cap).
-    // Any subsequent refund—even a small $500 refund—MUST be held until the rolling window expires.
+    // Therefore, it counts toward the active 24h rolling window ($6,000 of $8,000 daily cap used).
+    // A subsequent refund of $3,000 brings total to $9,000 (> $8,000 cap) and MUST be held until window expiry.
     const resSubsequent = await request(app)
       .post('/api/actions/route')
       .send({
         agentId: 'agent-finance-refund-04',
         tool: 'refund_engine',
         operation: 'issue_refund',
-        resource: 'synthetic://orders/ord-subsequent-500',
-        parameters: { order_id: 'ord-subsequent-500', amount: 500 }
+        resource: 'synthetic://orders/ord-subsequent-3000',
+        parameters: { order_id: 'ord-subsequent-3000', amount: 3000 }
       });
     expect(resSubsequent.status).toBe(200);
     expect(resSubsequent.body.gateDecision).toBe('REQUIRE_APPROVAL');
     expect(resSubsequent.body.gateReasonCode).toBe('CUMULATIVE_LIMIT_EXCEEDED_HELD_FOR_HUMAN');
-    expect(resSubsequent.body.explanation).toContain('cumulative total to $6500, exceeding daily cap of $5000');
+    expect(resSubsequent.body.explanation).toContain('exceeding daily cap of $8000');
     expect(resSubsequent.body.executionStatus).toBe('NOT_EXECUTED');
 
     // 4. Once the window expires (simulated by aging the $6,000 execution past 24 hours):

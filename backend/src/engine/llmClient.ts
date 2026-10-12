@@ -22,6 +22,111 @@ interface LLMCallResult {
   responseHash: string;
 }
 
+export interface ToolDefinition {
+  name: string;
+  description: string;
+  input_schema: {
+    type: 'object';
+    properties: Record<string, any>;
+    required?: string[];
+  };
+}
+
+export interface AnthropicToolMessage {
+  role: 'user' | 'assistant';
+  content: string | any[];
+}
+
+export interface AnthropicToolTurnResult {
+  textBlocks: string[];
+  toolUses: Array<{
+    id: string;
+    name: string;
+    input: Record<string, any>;
+  }>;
+  stopReason?: string;
+  rawResponse?: any;
+}
+
+/**
+ * Execute Anthropic tool-use turn reusing the established fetch/timeout/retry pattern.
+ * Model defaults to claude-sonnet-5-5 (configurable via LLM_MODEL_LIVE_AGENT or LLM_MODEL_PATCH).
+ */
+export async function executeAnthropicToolTurn(
+  messages: AnthropicToolMessage[],
+  tools: ToolDefinition[],
+  options?: {
+    model?: string;
+    maxTokens?: number;
+    systemPrompt?: string;
+  }
+): Promise<AnthropicToolTurnResult | null> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    return null;
+  }
+
+  const model = options?.model || process.env.LLM_MODEL_LIVE_AGENT || process.env.LLM_MODEL_PATCH || 'claude-sonnet-5-5';
+  const body = {
+    model,
+    max_tokens: options?.maxTokens || 1024,
+    system: options?.systemPrompt || 'You are an autonomous agent under the AegisOS governance perimeter. Use provided tools to execute actions.',
+    messages,
+    tools
+  };
+
+  // Reusable fetch/timeout/retry pattern (10s timeout, 1 retry)
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    try {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify(body)
+      });
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        const data = (await response.json()) as any;
+        const textBlocks: string[] = [];
+        const toolUses: Array<{ id: string; name: string; input: Record<string, any> }> = [];
+
+        if (Array.isArray(data.content)) {
+          for (const block of data.content) {
+            if (block.type === 'text' && typeof block.text === 'string') {
+              textBlocks.push(block.text);
+            } else if (block.type === 'tool_use') {
+              toolUses.push({
+                id: block.id,
+                name: block.name,
+                input: block.input || {}
+              });
+            }
+          }
+        }
+
+        return {
+          textBlocks,
+          toolUses,
+          stopReason: data.stop_reason,
+          rawResponse: data
+        };
+      }
+    } catch {
+      clearTimeout(timeoutId);
+      // Retry once on failure
+    }
+  }
+
+  return null;
+}
+
 /**
  * Resilient LLM client wrapper for AegisOS (Spec 6e)
  * Enforces:

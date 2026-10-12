@@ -187,42 +187,71 @@ export const ScenarioLauncherModal: React.FC<ScenarioLauncherModalProps> = ({
       }
     },
     {
+      id: 'scenario_5_degraded_comms',
+      title: 'Scenario 5: Degraded Comms (Link-Loss Telemetry Safe-Hold)',
+      agent: 'agent-pred-maint-01',
+      operation: 'create_maintenance_ticket',
+      description: 'Communication blackout causes propulsion telemetry to age out (15m old > 300s max). Fail-safe interlock activates safe-hold for human Duty Officer.',
+      expected: 'REQUIRE_APPROVAL',
+      color: 'border-amber-200 bg-amber-50/50 hover:bg-amber-50',
+      payload: {
+        agentId: 'agent-pred-maint-01',
+        tool: 'maintenance_scheduler',
+        operation: 'create_maintenance_ticket',
+        resource: 'synthetic://maintenance/scheduled_tickets',
+        parameters: {
+          equipment_id: 'turbine_propulsion_02',
+          timestamp: Date.now() - 900000,
+          vibration_rms: 4.8,
+          bearing_temp_c: 69.5,
+          model_confidence: 0.94,
+          telemetry: {
+            equipment_id: 'turbine_propulsion_02',
+            timestamp: Date.now() - 900000,
+            vibration_rms: 4.8,
+            bearing_temp_c: 69.5,
+            model_confidence: 0.94
+          }
+        }
+      }
+    },
+    {
       id: 'scenario_6',
-      title: 'Scenario 6: Delegated Financial Refund ($4,000 <= $5,000)',
+      title: 'Scenario 6: Delegated Spares Requisition (4,000 <= 5,000)',
       agent: 'agent-finance-refund-04',
       operation: 'issue_refund',
-      description: 'Customer refund of $4,000 is under max_auto_amount ($5,000). Evaluator issues ALLOW and synthetic ledger records payout.',
+      description: 'Critical propulsion spares requisition of 4,000 credits is within 5,000 auto-approval threshold. Gate issues ALLOW and logs cryptographic audit record.',
       expected: 'ALLOW',
       color: 'border-emerald-200 bg-emerald-50/50 hover:bg-emerald-50',
       payload: {
         agentId: 'agent-finance-refund-04',
-        tool: 'finance_gateway',
+        tool: 'requisition_engine',
         operation: 'issue_refund',
-        resource: 'synthetic://finance/refunds/tx-4000',
+        resource: 'synthetic://orders/req-synth-4000',
         parameters: {
-          order_id: 'ord-synth-4000',
+          order_id: 'req-synth-4000',
           amount: 4000.0,
-          idempotency_key: 'idemp-tx-4000-' + Date.now()
+          idempotency_key: 'idemp-req-4000-' + Date.now()
         }
       }
     },
     {
       id: 'scenario_7',
-      title: 'Scenario 7: Policy Threshold Exceeded ($6,000 > $5,000)',
+      title: 'Scenario 7: Spares Requisition Threshold Exceeded (6,000 > 5,000)',
       agent: 'agent-finance-refund-04',
       operation: 'issue_refund',
-      description: 'Refund amount $6,000 breaches autonomous threshold ($5,000). Evaluator requires approval and auto-creates immutable scenario backup.',
+      description: 'Radar assembly requisition of 6,000 credits exceeds autonomous threshold (5,000). Gate requires human Commander dual-custody authorization.',
       expected: 'REQUIRE_APPROVAL',
       color: 'border-amber-200 bg-amber-50/50 hover:bg-amber-50',
       payload: {
         agentId: 'agent-finance-refund-04',
-        tool: 'finance_gateway',
+        tool: 'requisition_engine',
         operation: 'issue_refund',
-        resource: 'synthetic://finance/refunds/tx-6000',
+        resource: 'synthetic://orders/req-synth-6000',
         parameters: {
-          order_id: 'ord-synth-6000',
+          order_id: 'req-synth-6000',
           amount: 6000.0,
-          idempotency_key: 'idemp-tx-6000-' + Date.now()
+          idempotency_key: 'idemp-req-6000-' + Date.now()
         }
       }
     }

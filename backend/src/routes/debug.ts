@@ -1,11 +1,12 @@
 import { Router, Request, Response } from 'express';
 import { runDebugAgent, getDebugHistory } from '../engine/debugAgent.js';
 import { getDatabase } from '../db/connection.js';
+import { requireAdmin } from '../auth/middleware.js';
 
 export const debugRouter = Router();
 
-// POST /api/debug/:incidentId/run (Run bounded closed-loop Debug Agent v2)
-debugRouter.post('/:incidentId/run', async (req: Request, res: Response) => {
+// POST /api/debug/:incidentId/run (Run bounded closed-loop Debug Agent v2, Admin only)
+debugRouter.post('/:incidentId/run', requireAdmin, async (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const incident = db.prepare('SELECT id FROM incidents WHERE id = ?').get(req.params.incidentId);
@@ -14,8 +15,8 @@ debugRouter.post('/:incidentId/run', async (req: Request, res: Response) => {
     }
 
     const actor = {
-      type: (req.body?.actorType as 'human' | 'system') || 'human',
-      id: req.body?.actorId || (req.headers['x-actor-id'] as string) || 'debug-operator'
+      type: 'human' as const,
+      id: req.user ? req.user.id : (req.body?.actorId || 'usr-admin')
     };
 
     const options = {

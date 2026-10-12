@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { AuditEvent } from '../types';
-import { parseJsonSafe } from '../utils';
+import { parseJsonSafe, formatSafeDate, formatSafeTime } from '../utils';
 
 interface AuditLogViewProps {
   auditEvents: AuditEvent[];
@@ -213,7 +213,7 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({ auditEvents }) => {
                         {evt.event_hash ? evt.event_hash.substring(0, 14) + '...' : '0x00'}
                       </td>
                       <td className="py-2.5 px-3 text-right font-mono text-[0.6875rem] text-slate-400">
-                        {new Date(evt.timestamp).toLocaleTimeString()}
+                        {formatSafeTime(evt.timestamp)}
                       </td>
                     </tr>
                   );
@@ -248,7 +248,7 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({ auditEvents }) => {
                 {selectedEvent.event_type}
               </h2>
               <span className="font-mono text-[0.6875rem] text-slate-400 block mt-0.5">
-                {new Date(selectedEvent.timestamp).toISOString()}
+                {formatSafeDate(selectedEvent.timestamp)}
               </span>
             </div>
 

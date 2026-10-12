@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { Incident, Tab } from '../types';
-import { parseJsonSafe } from '../utils';
+import { parseJsonSafe, formatSafeDate, formatSafeTime } from '../utils';
 import { DebugAgentPanel } from './DebugAgentPanel';
 
 interface IncidentsViewProps {
@@ -176,7 +176,7 @@ export const IncidentsView: React.FC<IncidentsViewProps> = ({
 
                   <div className="flex items-center justify-between text-[0.625rem] font-mono text-slate-400 pt-1 border-t border-slate-100">
                     <span className="text-indigo-700 font-semibold">{inc.policy_id}</span>
-                    <span>{new Date(inc.occurred_at).toLocaleTimeString()}</span>
+                    <span>{formatSafeTime(inc.occurred_at)}</span>
                   </div>
                 </div>
               );
@@ -306,7 +306,7 @@ export const IncidentsView: React.FC<IncidentsViewProps> = ({
                     <div className="p-2.5 bg-slate-50 border border-slate-200 rounded">
                       <div className="font-bold text-slate-800 text-[0.6875rem] mb-0.5">1. Incident Metadata</div>
                       <div className="text-slate-600 font-mono text-[0.625rem]">
-                        ID: {reportData.incident?.id || selectedIncident.id} · Timestamp: {new Date(reportData.incident?.occurred_at || selectedIncident.occurred_at).toISOString()}
+                        ID: {reportData.incident?.id || selectedIncident.id} · Timestamp: {formatSafeDate(reportData.incident?.occurred_at || selectedIncident.occurred_at)}
                       </div>
                     </div>
 

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { getDatabase } from '../db/connection.js';
 import { transitionAgentStatus, writeAuditEvent } from '../engine/gateway.js';
 import { resumeAgent } from '../engine/resumeGate.js';
+import { requireAdmin } from '../auth/middleware.js';
 
 export const agentsRouter = Router();
 
@@ -120,10 +121,10 @@ agentsRouter.post('/', (req: Request, res: Response) => {
 });
 
 // POST /api/agents/:id/pause (Administrator containment control, FR-6)
-agentsRouter.post('/:id/pause', (req: Request, res: Response) => {
+agentsRouter.post('/:id/pause', requireAdmin, (req: Request, res: Response) => {
   try {
     const reason = req.body.reason || 'Manual administrator pause';
-    const actorId = req.body.actorId || 'usr-admin';
+    const actorId = req.user ? req.user.id : (req.body.actorId || 'usr-admin');
     transitionAgentStatus(req.params.id, 'paused', { type: 'human', id: actorId }, reason);
     res.json({ success: true, message: `Agent ${req.params.id} has been paused.` });
   } catch (err: any) {
@@ -132,10 +133,10 @@ agentsRouter.post('/:id/pause', (req: Request, res: Response) => {
 });
 
 // POST /api/agents/:id/restrict (Administrator restriction control, FR-6)
-agentsRouter.post('/:id/restrict', (req: Request, res: Response) => {
+agentsRouter.post('/:id/restrict', requireAdmin, (req: Request, res: Response) => {
   try {
     const reason = req.body.reason || 'Manual administrator restriction';
-    const actorId = req.body.actorId || 'usr-admin';
+    const actorId = req.user ? req.user.id : (req.body.actorId || 'usr-admin');
     transitionAgentStatus(req.params.id, 'restricted', { type: 'human', id: actorId }, reason);
     res.json({ success: true, message: `Agent ${req.params.id} is now restricted.` });
   } catch (err: any) {
@@ -144,20 +145,22 @@ agentsRouter.post('/:id/restrict', (req: Request, res: Response) => {
 });
 
 const resumeSchema = z.object({
-  actorRole: z.string().default('admin'),
-  actorId: z.string().default('usr-admin'),
+  actorRole: z.string().optional(),
+  actorId: z.string().optional(),
   reason: z.string().min(1, 'Reason is mandatory for resumption')
 });
 
-// POST /api/agents/:id/resume (Centralized resume gate, Section 3.5)
-agentsRouter.post('/:id/resume', (req: Request, res: Response) => {
+// POST /api/agents/:id/resume (Centralized resume gate, Section 3.5, Admin only)
+agentsRouter.post('/:id/resume', requireAdmin, (req: Request, res: Response) => {
   try {
     const parsed = resumeSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ error: 'Invalid resume payload', details: parsed.error.format() });
     }
 
-    const { actorRole, actorId, reason } = parsed.data;
+    const actorRole = req.user ? req.user.role : (parsed.data.actorRole || 'admin');
+    const actorId = req.user ? req.user.id : (parsed.data.actorId || 'usr-admin');
+    const { reason } = parsed.data;
     const result = resumeAgent(req.params.id, { role: actorRole, id: actorId }, reason);
 
     if (!result.success) {
@@ -175,20 +178,22 @@ agentsRouter.post('/:id/resume', (req: Request, res: Response) => {
 });
 
 const terminateSchema = z.object({
-  actorRole: z.string().default('admin'),
-  actorId: z.string().default('usr-admin'),
+  actorRole: z.string().optional(),
+  actorId: z.string().optional(),
   reason: z.string().min(1, 'Reason is mandatory for termination')
 });
 
-// POST /api/agents/:id/terminate (Soft-termination with immutable snapshot, Section 6b)
-agentsRouter.post('/:id/terminate', (req: Request, res: Response) => {
+// POST /api/agents/:id/terminate (Soft-termination with immutable snapshot, Section 6b, Admin only)
+agentsRouter.post('/:id/terminate', requireAdmin, (req: Request, res: Response) => {
   try {
     const parsed = terminateSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ error: 'Invalid termination payload', details: parsed.error.format() });
     }
 
-    const { actorRole, actorId, reason } = parsed.data;
+    const actorRole = req.user ? req.user.role : (parsed.data.actorRole || 'admin');
+    const actorId = req.user ? req.user.id : (parsed.data.actorId || 'usr-admin');
+    const { reason } = parsed.data;
     if (actorRole !== 'admin') {
       return res.status(403).json({ error: 'UNAUTHORIZED_ROLE: Only administrators can terminate an agent.' });
     }
@@ -244,20 +249,22 @@ agentsRouter.post('/:id/terminate', (req: Request, res: Response) => {
 });
 
 const reinstateSchema = z.object({
-  actorRole: z.string().default('admin'),
-  actorId: z.string().default('usr-admin-2'),
+  actorRole: z.string().optional(),
+  actorId: z.string().optional(),
   reason: z.string().min(1, 'Reason is mandatory for reinstatement')
 });
 
-// POST /api/agents/:id/reinstate (Reinstatement with separation of duties, Section 6b)
-agentsRouter.post('/:id/reinstate', (req: Request, res: Response) => {
+// POST /api/agents/:id/reinstate (Reinstatement with separation of duties, Section 6b, Admin only)
+agentsRouter.post('/:id/reinstate', requireAdmin, (req: Request, res: Response) => {
   try {
     const parsed = reinstateSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ error: 'Invalid reinstate payload', details: parsed.error.format() });
     }
 
-    const { actorRole, actorId, reason } = parsed.data;
+    const actorRole = req.user ? req.user.role : (parsed.data.actorRole || 'admin');
+    const actorId = req.user ? req.user.id : (parsed.data.actorId || 'usr-admin-2');
+    const { reason } = parsed.data;
     if (actorRole !== 'admin') {
       return res.status(403).json({ error: 'UNAUTHORIZED_ROLE: Only administrators can reinstate an agent.' });
     }

@@ -1,5 +1,6 @@
 export type Tab = 
   | 'overview' 
+  | 'live-agent'
   | 'agents' 
   | 'policies' 
   | 'approvals' 
@@ -8,6 +9,48 @@ export type Tab =
   | 'tasks' 
   | 'audit'
   | 'backups';
+
+export type UserRole = 'admin' | 'reviewer' | 'auditor';
+
+export interface AuthUser {
+  id: string;
+  username: string;
+  role: UserRole;
+  label: string;
+  authority_level: number;
+}
+
+export interface LiveAgentStep {
+  step: number;
+  modelMessage?: string;
+  toolCall?: {
+    tool: string;
+    operation: string;
+    resource: string;
+    parameters: Record<string, any>;
+  };
+  gatewayDecision?: 'ALLOW' | 'REQUIRE_APPROVAL' | 'BLOCK';
+  reasonCode?: string;
+  policyLimit?: number | null;
+  dailyCap?: number | null;
+  cumulativeAmount?: number | null;
+  requestId?: string;
+  executionStatus?: string;
+  explanation?: string;
+  toolResult?: any;
+}
+
+export interface LiveAgentRunResult {
+  runId: string;
+  agentId: string;
+  instruction: string;
+  source: 'live_llm' | 'simulated_agent';
+  modelUsed: string;
+  stepCount: number;
+  transcript: LiveAgentStep[];
+  decisions: Array<'ALLOW' | 'REQUIRE_APPROVAL' | 'BLOCK'>;
+  finalAnswer: string;
+}
 
 export interface ScenarioBackup {
   id: string;

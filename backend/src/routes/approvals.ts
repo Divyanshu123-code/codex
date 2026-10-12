@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import { getDatabase } from '../db/connection.js';
 import { decideApproval } from '../engine/approval.js';
 import { writeAuditEvent } from '../engine/gateway.js';
+import { requireAdmin, requireReviewerOrAdmin } from '../auth/middleware.js';
 
 export const approvalsRouter = Router();
 
@@ -61,8 +62,9 @@ function handleDecision(req: Request, res: Response) {
       return res.status(400).json({ error: 'Missing mandatory decision or status field (APPROVED | REJECTED)' });
     }
 
-    const approverId = parsed.data.approverId || parsed.data.userId || 'usr-reviewer';
-    const approverRole = parsed.data.approverRole || parsed.data.role || (approverId.includes('admin') ? 'admin' : 'reviewer');
+    // P6: Actor and role derived strictly from token, never from request body
+    const approverId = req.user ? req.user.id : (parsed.data.approverId || parsed.data.userId || 'usr-reviewer');
+    const approverRole = req.user ? req.user.role : (parsed.data.approverRole || parsed.data.role || 'reviewer');
     const reason = parsed.data.reason;
     const wrongCallConfirmed = Boolean(parsed.data.wrongCallConfirmed || parsed.data.overridePassedChecks);
 
@@ -77,7 +79,7 @@ function handleDecision(req: Request, res: Response) {
 
     res.json(result);
   } catch (err: any) {
-    if (err.message && err.message.includes('UNAUTHORIZED_REVIEWER_ROLE')) {
+    if (err.message && (err.message.includes('UNAUTHORIZED_REVIEWER_ROLE') || err.message.includes('SEPARATION_OF_DUTIES_VIOLATION'))) {
       return res.status(403).json({ error: err.message });
     }
     if (err.message && err.message.includes('APPROVAL_ALREADY_DECIDED')) {
@@ -87,12 +89,12 @@ function handleDecision(req: Request, res: Response) {
   }
 }
 
-// Support both /:id/decision and /:id/decide for API resilience
-approvalsRouter.post('/:id/decision', handleDecision);
-approvalsRouter.post('/:id/decide', handleDecision);
+// Support both /:id/decision and /:id/decide for API resilience (Reviewer or Admin)
+approvalsRouter.post('/:id/decision', requireReviewerOrAdmin, handleDecision);
+approvalsRouter.post('/:id/decide', requireReviewerOrAdmin, handleDecision);
 
-// POST /api/approvals/:id/reopen - Direct administrative re-evaluation of mistakenly rejected approval
-approvalsRouter.post('/:id/reopen', (req: Request, res: Response) => {
+// POST /api/approvals/:id/reopen - Direct administrative re-evaluation of mistakenly rejected approval (Admin only)
+approvalsRouter.post('/:id/reopen', requireAdmin, (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const now = Date.now();
@@ -108,7 +110,7 @@ approvalsRouter.post('/:id/reopen', (req: Request, res: Response) => {
       return res.status(400).json({ error: 'CANNOT_REOPEN_NON_REJECTED: Only rejected approvals can be reopened for re-evaluation.' });
     }
 
-    const actorId = req.body.userId || req.body.approverId || req.body.actorId || 'usr-admin-2';
+    const actorId = req.user ? req.user.id : (req.body.userId || req.body.approverId || req.body.actorId || 'usr-admin-2');
     const reason = req.body.reason || 'Reopened following administrative review for re-evaluation of mistaken rejection.';
 
     // 2. Fetch or create backup snapshot in scenario_backups

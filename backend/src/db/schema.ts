@@ -69,6 +69,7 @@ export function initializeSchema(db: DatabaseSync): void {
       risk_level TEXT,
       allowed_operations TEXT NOT NULL, -- JSON array
       allowed_resources TEXT NOT NULL,  -- JSON array
+      permitted_data_scopes TEXT DEFAULT '["UNCLASSIFIED//EXERCISE", "RESTRICTED//EXERCISE"]', -- JSON array
       status TEXT NOT NULL CHECK(status IN ('active', 'restricted', 'paused')),
       policy_version TEXT NOT NULL,
       workflow_config TEXT NOT NULL,     -- JSON array of workflow steps
@@ -129,13 +130,16 @@ export function initializeSchema(db: DatabaseSync): void {
       escalation_target_role TEXT
     );
 
-    -- Human Approvals table (FR-9 & Section 3.2)
+    -- Human Approvals table (FR-9, Section 3.2 & Two-Person Integrity)
     CREATE TABLE IF NOT EXISTS approvals (
       id TEXT PRIMARY KEY,
       request_id TEXT NOT NULL,
       approver_id TEXT,
       approver_role TEXT,
-      status TEXT NOT NULL CHECK(status IN ('PENDING', 'APPROVED', 'REJECTED', 'EXPIRED')),
+      first_approver_id TEXT,
+      requires_two_person_integrity INTEGER NOT NULL DEFAULT 0,
+      reopened_from_id TEXT,
+      status TEXT NOT NULL CHECK(status IN ('PENDING', 'PENDING_SECOND_APPROVAL', 'APPROVED', 'REJECTED', 'EXPIRED')),
       reason TEXT,
       requested_at INTEGER NOT NULL,
       opened_at INTEGER,

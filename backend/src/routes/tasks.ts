@@ -51,7 +51,7 @@ tasksRouter.post('/', (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Missing required fields: title, task_type' });
     }
 
-    const actorId = (req.headers['x-actor-id'] as string) || 'operator-01';
+    const actorId = req.user ? req.user.id : ((req.headers['x-actor-id'] as string) || 'operator-01');
     const actorType = (req.headers['x-actor-type'] as any) || 'human';
 
     const result = allocateTask(
@@ -80,7 +80,7 @@ tasksRouter.post('/:id/escalate', (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Escalation reason is required' });
     }
 
-    const actorId = (req.headers['x-actor-id'] as string) || 'operator-01';
+    const actorId = req.user ? req.user.id : ((req.headers['x-actor-id'] as string) || 'operator-01');
     const actorType = (req.headers['x-actor-type'] as any) || 'human';
 
     escalateTask(

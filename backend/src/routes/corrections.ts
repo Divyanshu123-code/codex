@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getDatabase } from '../db/connection.js';
 import { testCorrection } from '../engine/sandbox.js';
 import { approveCorrection, applyCorrection } from '../engine/resumeGate.js';
+import { requireAdmin } from '../auth/middleware.js';
 
 export const correctionsRouter = Router();
 
@@ -46,20 +47,22 @@ correctionsRouter.post('/test', (req: Request, res: Response) => {
 });
 
 const approveCorrectionSchema = z.object({
-  approverId: z.string().min(1),
-  approverRole: z.string().min(1),
+  approverId: z.string().optional(),
+  approverRole: z.string().optional(),
   reason: z.string().min(1)
 });
 
-// POST /api/corrections/:id/approve
-correctionsRouter.post('/:id/approve', (req: Request, res: Response) => {
+// POST /api/corrections/:id/approve (Admin only)
+correctionsRouter.post('/:id/approve', requireAdmin, (req: Request, res: Response) => {
   try {
     const parsed = approveCorrectionSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ error: 'Invalid approval payload', details: parsed.error.format() });
     }
 
-    const { approverId, approverRole, reason } = parsed.data;
+    const approverId = req.user ? req.user.id : (parsed.data.approverId || 'usr-admin');
+    const approverRole = req.user ? req.user.role : (parsed.data.approverRole || 'admin');
+    const { reason } = parsed.data;
     approveCorrection(req.params.id, { id: approverId, role: approverRole }, reason);
     res.json({ success: true, message: `Correction ${req.params.id} approved.` });
   } catch (err: any) {
@@ -67,8 +70,8 @@ correctionsRouter.post('/:id/approve', (req: Request, res: Response) => {
   }
 });
 
-// POST /api/corrections/:id/apply
-correctionsRouter.post('/:id/apply', (req: Request, res: Response) => {
+// POST /api/corrections/:id/apply (Admin only)
+correctionsRouter.post('/:id/apply', requireAdmin, (req: Request, res: Response) => {
   try {
     applyCorrection(req.params.id);
     res.json({ success: true, message: `Correction ${req.params.id} applied to live agent configuration.` });

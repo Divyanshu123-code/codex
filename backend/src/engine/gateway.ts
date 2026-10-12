@@ -24,9 +24,29 @@ export interface RouteActionResult {
   incidentId?: string;
   evidenceChecks?: any;
   result?: any;
+  policyLimit?: number | null;
+  dailyCap?: number | null;
+  cumulativeAmount?: number | null;
 }
 
-const GATEWAY_SECRET = process.env.AGENT_GATEWAY_SECRET || 'codex_gateway_hmac_secret_2026';
+const DEV_FALLBACK_GATEWAY_CREDENTIAL = 'dev_ephemeral_insecure_gateway_fallback_credential';
+let hasWarnedDevGatewaySecret = false;
+
+/**
+ * Resolves gateway secret from environment, falling back to a dev-only credential
+ * with an explicit warning when run outside demo mode.
+ */
+export function getGatewaySecret(): string {
+  const envSecret = process.env.AGENT_GATEWAY_SECRET;
+  if (envSecret && envSecret.trim().length > 0) {
+    return envSecret;
+  }
+  if (!hasWarnedDevGatewaySecret && process.env.DEMO_MODE !== 'true' && process.env.NODE_ENV !== 'test') {
+    console.warn('[SECURITY WARNING] AGENT_GATEWAY_SECRET not configured in environment. Using dev-only fallback credential. This is insecure outside demo mode.');
+    hasWarnedDevGatewaySecret = true;
+  }
+  return DEV_FALLBACK_GATEWAY_CREDENTIAL;
+}
 
 /**
  * Single function authorized to transition an agent's status (Section 3.4)
@@ -172,6 +192,7 @@ export function routeAction(
     status: agentRow.status,
     allowed_operations: JSON.parse(agentRow.allowed_operations),
     allowed_resources: JSON.parse(agentRow.allowed_resources),
+    permitted_data_scopes: agentRow.permitted_data_scopes ? JSON.parse(agentRow.permitted_data_scopes) : undefined,
     policy_version: agentRow.policy_version,
     input_requirements: agentRow.input_requirements ? JSON.parse(agentRow.input_requirements) : {},
     uncertainty_rule: agentRow.uncertainty_rule ? JSON.parse(agentRow.uncertainty_rule) : {}
@@ -300,7 +321,7 @@ export function routeAction(
   // 7. Branch on Decision
   if (evaluation.decision === 'ALLOW') {
     // Generate signed execution token
-    const token = generateExecutionToken(requestId, action.operation, action.resource, GATEWAY_SECRET);
+    const token = generateExecutionToken(requestId, action.operation, action.resource, getGatewaySecret());
 
     // Record execution started
     const execId = `exec-${requestId}`;
@@ -334,7 +355,7 @@ export function routeAction(
         action.operation,
         action.resource,
         action.parameters || {},
-        GATEWAY_SECRET
+        getGatewaySecret()
       );
 
       targetDb.prepare(`
@@ -367,7 +388,10 @@ export function routeAction(
         explanation: evaluation.explanation,
         executionStatus: 'SUCCEEDED',
         evidenceChecks: evaluation.evidenceChecks,
-        result: toolOutput.result
+        result: toolOutput.result,
+        policyLimit: evaluation.policyLimit ?? null,
+        dailyCap: evaluation.dailyCap ?? null,
+        cumulativeAmount: evaluation.cumulativeAmount ?? null
       };
     } catch (toolErr: any) {
       targetDb.prepare(`
@@ -400,7 +424,10 @@ export function routeAction(
         explanation: evaluation.explanation,
         executionStatus: 'FAILED',
         evidenceChecks: evaluation.evidenceChecks,
-        nonExecutionReason: toolErr.message
+        nonExecutionReason: toolErr.message,
+        policyLimit: evaluation.policyLimit ?? null,
+        dailyCap: evaluation.dailyCap ?? null,
+        cumulativeAmount: evaluation.cumulativeAmount ?? null
       };
     }
   }
@@ -485,7 +512,10 @@ export function routeAction(
       approvalStatus: 'PENDING',
       executionStatus: 'NOT_EXECUTED',
       evidenceChecks: evaluation.evidenceChecks,
-      nonExecutionReason: 'APPROVAL_PENDING'
+      nonExecutionReason: 'APPROVAL_PENDING',
+      policyLimit: evaluation.policyLimit ?? null,
+      dailyCap: evaluation.dailyCap ?? null,
+      cumulativeAmount: evaluation.cumulativeAmount ?? null
     };
   }
 
@@ -582,7 +612,10 @@ export function routeAction(
     executionStatus: 'NOT_EXECUTED',
     nonExecutionReason: 'BLOCKED_BY_POLICY',
     evidenceChecks: evaluation.evidenceChecks,
-    incidentId: incidentId || undefined
+    incidentId: incidentId || undefined,
+    policyLimit: evaluation.policyLimit ?? null,
+    dailyCap: evaluation.dailyCap ?? null,
+    cumulativeAmount: evaluation.cumulativeAmount ?? null
   };
 }
 

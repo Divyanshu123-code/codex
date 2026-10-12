@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { Correction, Tab } from '../types';
-import { parseJsonSafe } from '../utils';
+import { parseJsonSafe, formatSafeTime, formatSafeDateTime } from '../utils';
 import { DebugAgentPanel } from './DebugAgentPanel';
 
 interface CorrectionsViewProps {
@@ -196,7 +196,7 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
 
                   <div className="flex items-center justify-between text-[0.625rem] font-mono text-slate-400 pt-1 border-t border-slate-100">
                     <span>Target: {corr.agent_id}</span>
-                    <span>{new Date(corr.created_at).toLocaleTimeString()}</span>
+                    <span>{formatSafeTime(corr.created_at)}</span>
                   </div>
                 </div>
               );
@@ -259,7 +259,7 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
                 </div>
               </div>
               <span className="font-mono text-[0.6875rem] text-slate-400">
-                Created: {new Date(selectedCorrection.created_at).toLocaleString()}
+                Created: {formatSafeDateTime(selectedCorrection.created_at)}
               </span>
             </div>
 
