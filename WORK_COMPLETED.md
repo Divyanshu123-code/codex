@@ -128,7 +128,7 @@ codex/
 - Built health endpoint (`GET /api/health`) and demo reset endpoint (`POST /api/demo/reset`).
 
 ### Phase 2: Registry & Deterministic Policy Evaluator
-- Implemented pure evaluation function [`evaluatePolicy()`](file:///Users/divanshu/codex/backend/src/engine/evaluator.ts).
+- Implemented pure evaluation function [`evaluatePolicy()`](backend/src/engine/evaluator.ts).
 - Enforced agent status invariants:
   - `active`: Normal policy evaluation.
   - `restricted`: Evaluates policy normally, but **elevates any `ALLOW` on a mutating operation to `REQUIRE_APPROVAL`** (`RESTRICTED_AGENT_MUTATING_ELEVATION`).
@@ -137,16 +137,16 @@ codex/
 - Built REST routes: `GET /api/agents`, `GET /api/policies`, `POST /api/policies`, `POST /api/actions/evaluate`.
 
 ### Phase 3: Tool Boundary & Gateway Enforcement (Gate G1)
-- Implemented [`protectedTools.ts`](file:///Users/divanshu/codex/backend/src/tools/protectedTools.ts) with private tool execution routines (`read_file`, `write_summary`, `archive_file`, `delete_file`).
+- Implemented [`protectedTools.ts`](backend/src/tools/protectedTools.ts) with private tool execution routines (`read_file`, `write_summary`, `archive_file`, `delete_file`).
 - **No-Bypass Invariant:** Tool calls require an HMAC token signed by the gateway secret (`verifyExecutionToken`). Unsigned or forged calls are rejected with `UNAUTHORIZED_TOOL_INVOCATION`.
-- Implemented core [`routeAction()`](file:///Users/divanshu/codex/backend/src/engine/gateway.ts) gateway:
+- Implemented core [`routeAction()`](backend/src/engine/gateway.ts) gateway:
   - **Scenario A:** Allowed action generates token, executes tool, updates execution status to `SUCCEEDED`, and appends audit events.
   - **Scenario B:** Sensitive action (`export_dataset`) is held, approval row created with `PENDING`, execution row created with `NOT_EXECUTED (APPROVAL_PENDING)`. Zero side effects.
   - **Scenario C:** Prohibited action (`delete_file`) blocked, execution set to `NOT_EXECUTED (BLOCKED_BY_POLICY)`. Synthetic documents verified 100% untouched. Agent transitioned to `paused` and incident opened.
 - **Gate G1 Satisfied:** Proved via automated tests that prohibited and held actions leave simulated protected state untouched.
 
 ### Phase 4 & 5: Human Approval, Revalidation & Containment (Gate G2)
-- Implemented [`decideApproval()`](file:///Users/divanshu/codex/backend/src/engine/approval.ts):
+- Implemented [`decideApproval()`](backend/src/engine/approval.ts):
   - Enforces reviewer/admin server-side role check (`UNAUTHORIZED_REVIEWER_ROLE`).
   - Enforces mandatory written justification (`REASON_REQUIRED`).
   - Atomic compare-and-set updates `approvals` status from `PENDING` to `APPROVED` or `REJECTED`, guaranteeing idempotency and preventing duplicate approvals.
@@ -158,17 +158,17 @@ codex/
 - **Gate G2 Satisfied:** Proved via automated tests that approvals execute at most once and revalidation catches status drift.
 
 ### Phase 6 & 7: Diagnostics, Sandbox & Central Resume Gate (Gate G3)
-- Implemented [`diagnoseIncident()`](file:///Users/divanshu/codex/backend/src/engine/diagnostics.ts) with closed signature catalog:
+- Implemented [`diagnoseIncident()`](backend/src/engine/diagnostics.ts) with closed signature catalog:
   - `SIG-DISALLOWED-OP`: Detects operations outside permitted scope; generates safe patch replacing `delete_file` with `archive_file`.
   - `SIG-OUT-OF-SCOPE-RESOURCE`: Detects perimeter violations; re-targets to in-scope resource.
   - `SIG-MALFORMED-INPUT`: Detects parameter schema errors.
   - `SIG-REPEATED-VIOLATION`: Identifies repeated anomalies; flags for human investigation.
   - Unmatched cases return `UNKNOWN_HUMAN_INVESTIGATION_REQUIRED`.
-- Implemented [`testCorrection()`](file:///Users/divanshu/codex/backend/src/engine/sandbox.ts):
+- Implemented [`testCorrection()`](backend/src/engine/sandbox.ts):
   - **S1–S6 Structural Checks:** Strict schema, allowlist path confinement (`workflow.steps[*]`), Diff Guard (protected fields hash invariance), capability boundaries (patch cannot introduce new operations not already permitted).
   - **B1–B6 Behavioural Checks:** In-memory trace replay, negative control assertion (verifies the prohibited operation is still blocked under patched config), regression must-block assertions.
   - **Bad Correction Test:** Proved that a patch attempting to grant `delete_file` fails S2/S3 with verdict `FAIL` and cannot be approved.
-- Implemented Centralized Resume Gate [`resumeAgent()`](file:///Users/divanshu/codex/backend/src/engine/resumeGate.ts) enforcing conditions R1 through R9:
+- Implemented Centralized Resume Gate [`resumeAgent()`](backend/src/engine/resumeGate.ts) enforcing conditions R1 through R9:
   - R1: Human administrator role required.
   - R2: Written justification required.
   - R3: Agent exists and policy version exists.
@@ -189,7 +189,7 @@ codex/
   - **Header Controls:** Persistent `DEMO ENVIRONMENT — SYNTHETIC, NON-OPERATIONAL DATA ONLY` disclaimer banner, health indicator, and 1-click Demo Reset.
 
 ### Phase 9: Automated Rehearsal & Verification Suite (Gate G4)
-- Implemented [`rehearsal.test.ts`](file:///Users/divanshu/codex/backend/tests/rehearsal.test.ts) running the complete end-to-end lifecycle offline from a clean reset.
+- Implemented [`rehearsal.test.ts`](backend/tests/rehearsal.test.ts) running the complete end-to-end lifecycle offline from a clean reset.
 - **Gate G4 Satisfied:** All 57 tests across 11 test suites pass cleanly in under 7 seconds.
 
 ---

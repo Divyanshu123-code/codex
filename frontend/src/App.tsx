@@ -20,6 +20,8 @@ export function App() {
   const [simLoading, setSimLoading] = useState(false);
   const [approvalReason, setApprovalReason] = useState('Authorized by lead reviewer for mission brief');
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [selectedAgentDetails, setSelectedAgentDetails] = useState<any>(null);
+  const [expandedApprovalId, setExpandedApprovalId] = useState<string | null>(null);
 
   // Diagnostics & Recovery State
   const [selectedIncident, setSelectedIncident] = useState<any>(null);
@@ -1172,71 +1174,220 @@ export function App() {
         </div>
       )}
 
-      {/* TAB 4: APPROVALS INBOX */}
+      {/* TAB 4: APPROVALS INBOX (PLAIN-LANGUAGE HUMAN CLEARANCE) */}
       {activeTab === 'approvals' && (
         <div>
-          <h2 style={{ fontSize: '1.15rem', fontWeight: 700, margin: '0 0 1rem' }}>Human Authorization Inbox</h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <div>
+              <h2 style={{ fontSize: '1.2rem', fontWeight: 800, margin: 0, color: '#0f172a' }}>
+                🛡️ Human Authorization Inbox — Dual-Custody Clearance
+              </h2>
+              <p style={{ margin: '0.25rem 0 0', fontSize: '0.85rem', color: '#64748b' }}>
+                Independent human review gate for intercepted sensitive, mutating, or uncertain actions. Decisions, approvals, and executions are tracked as distinct records (Invariant G2).
+              </p>
+            </div>
+            <button
+              onClick={refreshData}
+              style={{ padding: '0.35rem 0.75rem', backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '0.8rem', cursor: 'pointer' }}
+            >
+              🔄 Refresh Queue
+            </button>
+          </div>
+
           {approvals.length === 0 ? (
-            <p style={{ color: '#64748b' }}>No pending approval requests.</p>
+            <div style={{ padding: '2rem', textAlign: 'center', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px dashed #cbd5e1' }}>
+              <p style={{ color: '#64748b', margin: 0, fontSize: '0.9rem' }}>No pending or historical approval requests. All agent proposals are currently within autonomous bounds.</p>
+            </div>
           ) : (
-            <div style={{ display: 'grid', gap: '1rem' }}>
-              {approvals.map((app) => (
-                <div key={app.id} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '1.25rem', backgroundColor: app.status === 'PENDING' ? '#fffbeb' : '#fff' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                    <div>
-                      <strong>Approval ID:</strong> <code>{app.id}</code> | <strong>Request ID:</strong> <code>{app.request_id}</code>
-                    </div>
-                    <span style={{
-                      padding: '2px 8px',
-                      borderRadius: '4px',
-                      fontWeight: 700,
-                      fontSize: '0.8rem',
-                      backgroundColor: app.status === 'APPROVED' ? '#dcfce7' : app.status === 'REJECTED' ? '#fee2e2' : '#fef3c7',
-                      color: app.status === 'APPROVED' ? '#15803d' : app.status === 'REJECTED' ? '#b91c1c' : '#b45309'
-                    }}>
-                      {app.status}
-                    </span>
-                  </div>
+            <div style={{ display: 'grid', gap: '1.25rem' }}>
+              {approvals.map((app) => {
+                const isExpanded = expandedApprovalId === app.id;
+                let parsedEvidence: any = null;
+                try {
+                  if (app.evidence_checks) {
+                    parsedEvidence = typeof app.evidence_checks === 'string' ? JSON.parse(app.evidence_checks) : app.evidence_checks;
+                  }
+                } catch {}
 
-                  <div style={{ fontSize: '0.85rem', color: '#475569', marginBottom: '0.5rem' }}>
-                    Target: <code>{app.operation}</code> on <code>{app.resource}</code> | Agent: <code>{app.agent_id}</code>
-                  </div>
+                let parsedParams: any = null;
+                try {
+                  if (app.parameters) {
+                    parsedParams = typeof app.parameters === 'string' ? JSON.parse(app.parameters) : app.parameters;
+                  }
+                } catch {}
 
-                  {app.status === 'PENDING' && (
-                    <div style={{ marginTop: '1rem', borderTop: '1px solid #fde68a', paddingTop: '0.75rem' }}>
-                      <div style={{ marginBottom: '0.5rem' }}>
-                        <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#475569' }}>Mandatory Justification / Reason:</label>
-                        <input
-                          type="text"
-                          value={approvalReason}
-                          onChange={(e) => setApprovalReason(e.target.value)}
-                          style={{ width: '100%', padding: '0.4rem', border: '1px solid #cbd5e1', borderRadius: '4px', marginTop: '0.25rem' }}
-                        />
+                return (
+                  <div key={app.id} style={{
+                    border: '1px solid',
+                    borderColor: app.status === 'PENDING' ? '#f59e0b' : '#e2e8f0',
+                    borderRadius: '8px',
+                    padding: '1.25rem',
+                    backgroundColor: app.status === 'PENDING' ? '#fffdf7' : '#fff',
+                    boxShadow: app.status === 'PENDING' ? '0 4px 6px -1px rgba(245, 158, 11, 0.1)' : '0 1px 3px rgba(0,0,0,0.05)'
+                  }}>
+                    {/* Header */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <span style={{ fontSize: '1.1rem' }}>{app.status === 'PENDING' ? '⏳' : app.status === 'APPROVED' ? '✅' : '🛑'}</span>
+                        <div>
+                          <strong style={{ fontSize: '0.95rem', color: '#0f172a' }}>Approval Authorization Record: <code>{app.id}</code></strong>
+                          <span style={{ fontSize: '0.75rem', color: '#64748b', marginLeft: '0.75rem' }}>Request: <code>{app.request_id}</code></span>
+                        </div>
                       </div>
-                      <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        <button
-                          onClick={() => handleDecideApproval(app.id, 'APPROVED')}
-                          style={{ padding: '0.4rem 1rem', backgroundColor: '#16a34a', color: '#fff', border: 'none', borderRadius: '4px', fontWeight: 600, cursor: 'pointer' }}
-                        >
-                          ✓ Approve & Execute
-                        </button>
-                        <button
-                          onClick={() => handleDecideApproval(app.id, 'REJECTED')}
-                          style={{ padding: '0.4rem 1rem', backgroundColor: '#dc2626', color: '#fff', border: 'none', borderRadius: '4px', fontWeight: 600, cursor: 'pointer' }}
-                        >
-                          ✕ Reject (No Side Effects)
-                        </button>
+                      <span style={{
+                        padding: '3px 10px',
+                        borderRadius: '12px',
+                        fontWeight: 800,
+                        fontSize: '0.78rem',
+                        backgroundColor: app.status === 'APPROVED' ? '#dcfce7' : app.status === 'REJECTED' ? '#fee2e2' : '#fef3c7',
+                        color: app.status === 'APPROVED' ? '#15803d' : app.status === 'REJECTED' ? '#b91c1c' : '#b45309',
+                        border: `1px solid ${app.status === 'APPROVED' ? '#86efac' : app.status === 'REJECTED' ? '#fca5a5' : '#fde68a'}`
+                      }}>
+                        {app.status}
+                      </span>
+                    </div>
+
+                    {/* Plain-Language Synopsis */}
+                    <div style={{ backgroundColor: '#f8fafc', borderLeft: '4px solid #3b82f6', padding: '0.75rem 1rem', borderRadius: '0 6px 6px 0', marginBottom: '0.85rem' }}>
+                      <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#3b82f6', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.2rem' }}>
+                        Plain-Language Action Request Review
+                      </div>
+                      <p style={{ margin: 0, fontSize: '0.88rem', color: '#1e293b', lineHeight: 1.45 }}>
+                        Agent <strong><code>{app.agent_id}</code></strong> ({app.agent_category ? <span style={{ fontWeight: 700, color: '#1d4ed8' }}>{app.agent_category.replace(/_/g, ' ')}</span> : 'autonomous agent'}) requested permission to perform operation <strong><code>{app.operation}</code></strong> targeting protected resource <strong><code>{app.resource}</code></strong>.
+                      </p>
+                      {app.request_explanation && (
+                        <div style={{ marginTop: '0.4rem', fontSize: '0.8rem', color: '#475569', fontStyle: 'italic' }}>
+                          Reason Held: {app.request_explanation}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Three-Stage Lifecycle Invariant Grid (G2) */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: '0.85rem' }}>
+                      <div style={{ backgroundColor: '#f1f5f9', padding: '0.6rem', borderRadius: '6px' }}>
+                        <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>1. Policy Gate Decision</div>
+                        <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#b45309' }}>{app.gate_decision || 'REQUIRE_APPROVAL'}</div>
+                        <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Code: {app.gate_reason_code || 'APPROVAL_REQUIRED'}</div>
+                      </div>
+                      <div style={{ backgroundColor: app.status === 'PENDING' ? '#fffbeb' : '#f1f5f9', padding: '0.6rem', borderRadius: '6px' }}>
+                        <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>2. Human Clearance</div>
+                        <div style={{ fontSize: '0.85rem', fontWeight: 800, color: app.status === 'APPROVED' ? '#16a34a' : app.status === 'REJECTED' ? '#dc2626' : '#d97706' }}>
+                          {app.status}
+                        </div>
+                        <div style={{ fontSize: '0.72rem', color: '#64748b' }}>{app.approver_id ? `By: ${app.approver_id}` : 'Role: reviewer / admin'}</div>
+                      </div>
+                      <div style={{ backgroundColor: '#f1f5f9', padding: '0.6rem', borderRadius: '6px' }}>
+                        <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>3. Tool Execution</div>
+                        <div style={{ fontSize: '0.85rem', fontWeight: 800, color: app.execution_status === 'SUCCEEDED' ? '#16a34a' : '#64748b' }}>
+                          {app.execution_status || 'NOT_EXECUTED (APPROVAL_PENDING)'}
+                        </div>
+                        <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Boundary: HMAC Signed Token</div>
                       </div>
                     </div>
-                  )}
 
-                  {app.reason && (
-                    <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#64748b' }}>
-                      <strong>Reviewer Reason:</strong> {app.reason} (by {app.approver_id})
+                    {/* Evidence & Technical Details Disclosure */}
+                    <div style={{ marginBottom: '0.75rem' }}>
+                      <button
+                        onClick={() => setExpandedApprovalId(isExpanded ? null : app.id)}
+                        style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', padding: 0 }}
+                      >
+                        {isExpanded ? '▼ Hide Technical Payload & Domain Checks' : '▶ Inspect Technical Payload & Domain Evidence Checks'}
+                      </button>
+
+                      {isExpanded && (
+                        <div style={{ marginTop: '0.5rem', backgroundColor: '#0f172a', color: '#f8fafc', padding: '0.75rem', borderRadius: '6px', fontSize: '0.75rem' }}>
+                          {parsedEvidence?.checks && (
+                            <div style={{ marginBottom: '0.5rem', borderBottom: '1px solid #334155', paddingBottom: '0.5rem' }}>
+                              <strong style={{ color: '#38bdf8' }}>Deterministic Domain Quality Checks:</strong>
+                              <div style={{ display: 'grid', gap: '0.25rem', marginTop: '0.35rem' }}>
+                                {parsedEvidence.checks.map((chk: any, idx: number) => (
+                                  <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <span>{chk.passed ? '✅' : '❌'}</span>
+                                    <strong style={{ color: chk.passed ? '#4ade80' : '#f87171' }}>{chk.name}:</strong>
+                                    <span style={{ color: '#cbd5e1' }}>{chk.details}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          <div>
+                            <strong style={{ color: '#38bdf8' }}>Action Payload Parameters:</strong>
+                            <pre style={{ margin: '0.25rem 0 0', whiteSpace: 'pre-wrap', wordBreak: 'break-all', color: '#a5f3fc' }}>
+                              {JSON.stringify(parsedParams || {}, null, 2)}
+                            </pre>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              ))}
+
+                    {/* Review Decision Controls (for PENDING items) */}
+                    {app.status === 'PENDING' && (
+                      <div style={{ marginTop: '1rem', borderTop: '1px solid #fed7aa', paddingTop: '0.85rem' }}>
+                        <div style={{ marginBottom: '0.6rem' }}>
+                          <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#334155' }}>
+                            Mandatory Justification / Reviewer Authorization Note (Required by Audit Invariant):
+                          </label>
+                          <input
+                            type="text"
+                            value={approvalReason}
+                            onChange={(e) => setApprovalReason(e.target.value)}
+                            style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '4px', marginTop: '0.25rem', fontSize: '0.85rem' }}
+                            placeholder="Enter operational clearance justification..."
+                          />
+                          <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.3rem', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '0.72rem', color: '#64748b' }}>Presets:</span>
+                            <button
+                              type="button"
+                              onClick={() => setApprovalReason('Authorized reconnaissance patrol to resolve sensor contradiction')}
+                              style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '0.72rem', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
+                            >
+                              Recon Patrol Authorization
+                            </button>
+                            <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>|</span>
+                            <button
+                              type="button"
+                              onClick={() => setApprovalReason('Verified turbine telemetry manually; authorized maintenance ticket')}
+                              style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '0.72rem', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
+                            >
+                              Maintenance Clearance
+                            </button>
+                            <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>|</span>
+                            <button
+                              type="button"
+                              onClick={() => setApprovalReason('Rejected: contradictory reconnaissance evidence requires ground verification')}
+                              style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: '0.72rem', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
+                            >
+                              Contradiction Rejection
+                            </button>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '0.75rem' }}>
+                          <button
+                            onClick={() => handleDecideApproval(app.id, 'APPROVED')}
+                            style={{ padding: '0.5rem 1.25rem', backgroundColor: '#16a34a', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem' }}
+                          >
+                            ✓ Authorize & Execute Tool Action
+                          </button>
+                          <button
+                            onClick={() => handleDecideApproval(app.id, 'REJECTED')}
+                            style={{ padding: '0.5rem 1.25rem', backgroundColor: '#dc2626', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem' }}
+                          >
+                            ✕ Reject (Zero Protected Side Effects)
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Historical Decision Details */}
+                    {app.reason && (
+                      <div style={{ marginTop: '0.75rem', padding: '0.5rem 0.75rem', backgroundColor: '#f1f5f9', borderRadius: '4px', fontSize: '0.8rem', color: '#334155' }}>
+                        <strong>Recorded Reviewer Justification:</strong> "{app.reason}" — decided by <code>{app.approver_id}</code>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -1599,6 +1750,121 @@ export function App() {
       {activeTab === 'agents' && (
         <div>
           <h2 style={{ fontSize: '1.15rem', fontWeight: 700, margin: '0 0 1rem' }}>Registered Agents & Versioned Policies</h2>
+
+          {/* AGENT DETAIL MODAL */}
+          {selectedAgentDetails && (
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(15, 23, 42, 0.75)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000,
+              backdropFilter: 'blur(3px)'
+            }}>
+              <div style={{
+                backgroundColor: '#fff',
+                borderRadius: '12px',
+                width: '90%',
+                maxWidth: '720px',
+                maxHeight: '90vh',
+                overflowY: 'auto',
+                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.25)',
+                padding: '1.75rem',
+                border: '1px solid #cbd5e1'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem', marginBottom: '1.25rem' }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                      <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: '#0f172a' }}>{selectedAgentDetails.name}</h3>
+                      <span style={{ fontSize: '0.72rem', fontWeight: 800, padding: '2px 8px', borderRadius: '4px', backgroundColor: '#eff6ff', color: '#1d4ed8' }}>
+                        {selectedAgentDetails.agent_category?.toUpperCase()}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                      Agent ID: <code>{selectedAgentDetails.id}</code> | Owner Team: <strong>{selectedAgentDetails.owner_team || selectedAgentDetails.team}</strong>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setSelectedAgentDetails(null)}
+                    style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '0.35rem 0.75rem', fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem' }}
+                  >
+                    ✕ Close
+                  </button>
+                </div>
+
+                <div style={{ display: 'grid', gap: '1rem' }}>
+                  {/* Operational Purpose */}
+                  <div>
+                    <h4 style={{ margin: '0 0 0.25rem', fontSize: '0.8rem', fontWeight: 700, color: '#334155', textTransform: 'uppercase' }}>Operational Purpose & Tactical Mission</h4>
+                    <p style={{ margin: 0, fontSize: '0.88rem', color: '#1e293b', lineHeight: 1.5, backgroundColor: '#f8fafc', padding: '0.75rem', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                      {selectedAgentDetails.purpose || 'Autonomous task execution agent bounded by versioned security policy.'}
+                    </p>
+                  </div>
+
+                  {/* Capabilities & Scope */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                    <div style={{ backgroundColor: '#f8fafc', padding: '0.75rem', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                      <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.35rem' }}>Permitted Operations</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+                        {selectedAgentDetails.allowed_operations?.map((op: string) => (
+                          <span key={op} style={{ fontSize: '0.75rem', padding: '2px 6px', backgroundColor: '#e0f2fe', color: '#0369a1', borderRadius: '3px', fontWeight: 600 }}>
+                            {op}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{ backgroundColor: '#f8fafc', padding: '0.75rem', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                      <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.35rem' }}>Permitted Data Perimeters</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+                        {selectedAgentDetails.allowed_resources?.map((res: string) => (
+                          <code key={res} style={{ fontSize: '0.73rem', padding: '2px 6px', backgroundColor: '#f1f5f9', color: '#334155', borderRadius: '3px' }}>
+                            {res}
+                          </code>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Domain Input Quality Requirements */}
+                  <div>
+                    <h4 style={{ margin: '0 0 0.25rem', fontSize: '0.8rem', fontWeight: 700, color: '#334155', textTransform: 'uppercase' }}>Deterministic Input Quality Preconditions</h4>
+                    <pre style={{ margin: 0, padding: '0.75rem', backgroundColor: '#0f172a', color: '#38bdf8', borderRadius: '6px', fontSize: '0.75rem', overflowX: 'auto' }}>
+                      {typeof selectedAgentDetails.input_requirements === 'string'
+                        ? selectedAgentDetails.input_requirements
+                        : JSON.stringify(selectedAgentDetails.input_requirements || {}, null, 2)}
+                    </pre>
+                  </div>
+
+                  {/* Uncertainty Evaluation Rule */}
+                  <div>
+                    <h4 style={{ margin: '0 0 0.25rem', fontSize: '0.8rem', fontWeight: 700, color: '#334155', textTransform: 'uppercase' }}>Uncertainty Assessment Rule (Never Fabricated)</h4>
+                    <pre style={{ margin: 0, padding: '0.75rem', backgroundColor: '#0f172a', color: '#f59e0b', borderRadius: '6px', fontSize: '0.75rem', overflowX: 'auto' }}>
+                      {typeof selectedAgentDetails.uncertainty_rule === 'string'
+                        ? selectedAgentDetails.uncertainty_rule
+                        : JSON.stringify(selectedAgentDetails.uncertainty_rule || {}, null, 2)}
+                    </pre>
+                  </div>
+
+                  {/* Workflow Pipeline */}
+                  {selectedAgentDetails.workflow_config && (
+                    <div>
+                      <h4 style={{ margin: '0 0 0.25rem', fontSize: '0.8rem', fontWeight: 700, color: '#334155', textTransform: 'uppercase' }}>Configured Workflow Pipeline Steps</h4>
+                      <pre style={{ margin: 0, padding: '0.75rem', backgroundColor: '#1e293b', color: '#a5f3fc', borderRadius: '6px', fontSize: '0.75rem', overflowX: 'auto' }}>
+                        {typeof selectedAgentDetails.workflow_config === 'string'
+                          ? selectedAgentDetails.workflow_config
+                          : JSON.stringify(selectedAgentDetails.workflow_config || [], null, 2)}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
           
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
             {agents.map((ag) => (
@@ -1652,9 +1918,26 @@ export function App() {
                   </div>
                 )}
 
-                <div style={{ fontSize: '0.78rem', color: '#334155', backgroundColor: '#f8fafc', padding: '0.45rem', borderRadius: '4px' }}>
+                <div style={{ fontSize: '0.78rem', color: '#334155', backgroundColor: '#f8fafc', padding: '0.45rem', borderRadius: '4px', marginBottom: '0.5rem' }}>
                   <strong>Allowed Operations:</strong> {ag.allowed_operations?.join(', ')}
                 </div>
+
+                <button
+                  onClick={() => setSelectedAgentDetails(ag)}
+                  style={{
+                    width: '100%',
+                    padding: '0.45rem',
+                    backgroundColor: '#f1f5f9',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '5px',
+                    fontSize: '0.78rem',
+                    fontWeight: 700,
+                    color: '#1e293b',
+                    cursor: 'pointer'
+                  }}
+                >
+                  🔍 Inspect Complete Agent Governance Specification
+                </button>
               </div>
             ))}
           </div>

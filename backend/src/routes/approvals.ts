@@ -13,10 +13,14 @@ approvalsRouter.get('/', (req: Request, res: Response) => {
       SELECT 
         a.*,
         r.agent_id,
+        r.agent_category,
         r.tool,
         r.operation,
         r.resource,
         r.parameters,
+        r.gate_decision,
+        r.gate_reason_code,
+        r.evidence_checks,
         r.explanation as request_explanation,
         e.status as execution_status,
         e.non_execution_reason
