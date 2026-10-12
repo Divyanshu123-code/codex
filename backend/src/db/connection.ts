@@ -14,7 +14,7 @@ export function getDatabase(dbPath?: string, forceNew: boolean = false): Databas
 
   if (forceNew) {
     const db = new DatabaseSync(dbPath || ':memory:');
-    db.exec('PRAGMA foreign_keys = ON;');
+    db.exec('PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
     return db;
   }
 
@@ -31,7 +31,7 @@ export function getDatabase(dbPath?: string, forceNew: boolean = false): Databas
   }
 
   dbInstance = new DatabaseSync(resolvedPath);
-  dbInstance.exec('PRAGMA foreign_keys = ON;');
+  dbInstance.exec('PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
   return dbInstance;
 }
 

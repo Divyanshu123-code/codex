@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { Approval } from '../types';
 import { parseJsonSafe } from '../utils';
 
@@ -28,6 +28,71 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
   const [showRawPayload, setShowRawPayload] = useState(false);
   const [aiExplanation, setAiExplanation] = useState<string | null>(null);
   const [isExplaining, setIsExplaining] = useState(false);
+  const [isReopening, setIsReopening] = useState(false);
+  const [reopenError, setReopenError] = useState<string | null>(null);
+
+  // Sync selectedApproval with selectedApprovalId and fresh approvals array
+  useEffect(() => {
+    if (selectedApprovalId) {
+      const match = approvals.find(a => a.id === selectedApprovalId || a.request_id === selectedApprovalId);
+      if (match) {
+        setSelectedApproval(match);
+        return;
+      }
+    }
+    if (selectedApproval) {
+      const fresh = approvals.find(a => a.id === selectedApproval.id);
+      if (fresh) {
+        setSelectedApproval(fresh);
+        return;
+      }
+    }
+    if (approvals.length > 0 && !selectedApproval) {
+      setSelectedApproval(approvals[0]);
+    }
+  }, [selectedApprovalId, approvals]);
+
+  // When selectedApproval has reopened_from_id, default reviewerUser to usr-admin-2 for dual-custody
+  useEffect(() => {
+    if (selectedApproval?.reopened_from_id) {
+      setReviewerUser('usr-admin-2');
+    }
+  }, [selectedApproval?.id, selectedApproval?.reopened_from_id]);
+
+  const handleReopenDirect = async () => {
+    if (!selectedApproval) return;
+    setIsReopening(true);
+    setReopenError(null);
+    try {
+      const res = await fetch(`/api/approvals/${selectedApproval.id}/reopen`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: 'usr-admin-2',
+          role: 'admin',
+          reason: 'Reopened following administrative review for re-evaluation of mistaken rejection.'
+        })
+      });
+      const data = await parseJsonSafe(res);
+      if (!res.ok) {
+        throw new Error(data?.error || `Failed to reopen approval (${res.status})`);
+      }
+      setSelectedApproval(prev => prev ? {
+        ...prev,
+        status: 'PENDING',
+        reopened_from_id: prev.id,
+        reason: null,
+        approver_id: null,
+        execution_status: 'NOT_EXECUTED'
+      } : null);
+      setReviewerUser('usr-admin-2');
+      setWrittenReason('Re-evaluation clearance confirmed following administrative audit review.');
+    } catch (err: any) {
+      setReopenError(err.message || 'Failed to reopen case');
+    } finally {
+      setIsReopening(false);
+    }
+  };
 
   const handleFetchAiExplanation = async () => {
     if (!selectedApproval) return;
@@ -217,15 +282,22 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
                       <span className="text-slate-300">•</span>
                       <span className="font-mono text-[0.6875rem] text-slate-500">{item.agent_id}</span>
                     </div>
-                    <span className={`px-2 py-0.5 rounded text-[0.625rem] font-mono font-bold uppercase ${
-                      item.status === 'PENDING'
-                        ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                        : item.status === 'APPROVED'
-                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                        : 'bg-rose-100 text-rose-800 border border-rose-300'
-                    }`}>
-                      {item.status}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className={`px-2 py-0.5 rounded text-[0.625rem] font-mono font-bold uppercase ${
+                        item.status === 'PENDING'
+                          ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                          : item.status === 'APPROVED'
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                          : 'bg-rose-100 text-rose-800 border border-rose-300'
+                      }`}>
+                        {item.status}
+                      </span>
+                      {item.reopened_from_id && (
+                        <span className="px-1.5 py-0.5 rounded text-[0.5625rem] font-mono font-bold bg-indigo-100 text-indigo-800 border border-indigo-200" title="Recovered from earlier rejection">
+                          REOPENED
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <div className="text-xs font-bold text-slate-900 mb-1 flex items-center gap-1.5">
@@ -241,7 +313,14 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
                     <span className="text-amber-700 font-semibold truncate max-w-[220px]">
                       {item.gate_reason_code || 'REQUIRE_APPROVAL'}
                     </span>
-                    <span>{new Date(item.requested_at).toLocaleTimeString()}</span>
+                    <div className="flex items-center gap-2">
+                      {item.status === 'REJECTED' && (
+                        <span className="text-[0.625rem] text-indigo-600 font-sans font-semibold underline">
+                          Re-evaluate
+                        </span>
+                      )}
+                      <span>{new Date(item.requested_at).toLocaleTimeString()}</span>
+                    </div>
                   </div>
                 </div>
               );
@@ -512,20 +591,52 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
                 </div>
               </div>
             ) : (
-              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg text-xs space-y-1">
-                <div className="flex items-center justify-between font-mono text-[0.6875rem]">
-                  <span className="text-slate-500">Decided By:</span>
-                  <span className="font-bold text-slate-800">{selectedApproval.approver_id || 'usr-reviewer'}</span>
+              <div className="space-y-3">
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg text-xs space-y-1">
+                  <div className="flex items-center justify-between font-mono text-[0.6875rem]">
+                    <span className="text-slate-500">Decided By:</span>
+                    <span className="font-bold text-slate-800">{selectedApproval.approver_id || 'usr-reviewer'}</span>
+                  </div>
+                  <div className="flex items-center justify-between font-mono text-[0.6875rem]">
+                    <span className="text-slate-500">Verdict:</span>
+                    <span className={`font-bold ${selectedApproval.status === 'APPROVED' ? 'text-emerald-700' : 'text-rose-700'}`}>
+                      {selectedApproval.status}
+                    </span>
+                  </div>
+                  <p className="text-[0.6875rem] text-slate-600 pt-1 border-t border-slate-200">
+                    Justification: "{selectedApproval.reason || 'Verified by human clearance authority'}"
+                  </p>
                 </div>
-                <div className="flex items-center justify-between font-mono text-[0.6875rem]">
-                  <span className="text-slate-500">Verdict:</span>
-                  <span className={`font-bold ${selectedApproval.status === 'APPROVED' ? 'text-emerald-700' : 'text-rose-700'}`}>
-                    {selectedApproval.status}
-                  </span>
-                </div>
-                <p className="text-[0.6875rem] text-slate-600 pt-1 border-t border-slate-200">
-                  Justification: "{selectedApproval.reason || 'Verified by human clearance authority'}"
-                </p>
+
+                {selectedApproval.status === 'REJECTED' && (
+                  <div className="p-3.5 bg-gradient-to-r from-amber-50 to-indigo-50/60 border border-amber-200/80 rounded-lg space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-amber-950 font-bold text-xs">
+                        <span className="material-symbols-outlined text-[1.125rem] text-amber-600">settings_backup_restore</span>
+                        <span>Mistaken Rejection? Re-evaluate Request</span>
+                      </div>
+                      <span className="text-[0.625rem] font-mono font-bold bg-amber-200/80 text-amber-900 px-1.5 py-0.5 rounded">
+                        RECOVERABLE
+                      </span>
+                    </div>
+                    <p className="text-[0.6875rem] text-slate-700 leading-relaxed">
+                      If this case was rejected by mistake, you can recover it directly from Backup &amp; Recovery and reopen it for re-evaluation. Reopening will return this request to active <strong>PENDING</strong> review so you can either approve or reject it.
+                    </p>
+                    <button
+                      onClick={handleReopenDirect}
+                      disabled={isReopening}
+                      className="w-full py-2 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-1.5 transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[1rem]">replay</span>
+                      {isReopening ? 'Restoring for Re-evaluation...' : 'Reopen for Re-evaluation (Approve / Reject)'}
+                    </button>
+                    {reopenError && (
+                      <div className="p-2 rounded bg-rose-50 border border-rose-200 text-rose-700 text-xs font-mono">
+                        {reopenError}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
