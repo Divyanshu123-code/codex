@@ -419,20 +419,67 @@ All 57 tests pass cleanly across 11 test suites. Both backend and frontend build
 
 ## 11. Stitch Design System UI Implementation & Backend Integration
 
-Extracted and implemented the institutional Stitch UI architecture from `stitch_ai_agent_governance_os`:
-1. **Design System & Aesthetics (`DESIGN.md`):** Configured Inter & JetBrains Mono typography, Material Symbols Outlined icons, institutional cool canvas (`#faf9fd`), surface containers, and custom palette tokens into `frontend/index.html` and Tailwind configuration.
-2. **Persistent Shell & Header (`Header.tsx`, `Sidebar.tsx`):**
-   - Top demo banner: `Demo Environment — Synthetic, Non-Operational Data Only`
-   - Fixed header with brand shield logo, global search bar, Quick Scenario Runner launcher button, active enforcement pulse, notifications, and operator profile (`Elena Vance - Governance Lead & Delegated Reviewer`).
-   - Side rail with 8 structured views, pending notification counters on Approvals and Incidents, and cryptographic session auth card.
-3. **8 Integrated Views:**
-   - **Overview (`OverviewView.tsx`):** KPI summary cards, Needs Attention queue with direct action triggers, fleet overview, 24h policy outcomes distribution, and recent activity log.
-   - **Agents Fleet (`AgentsView.tsx`):** Searchable agent table, risk tiers, slide-out Agent Details Inspection Drawer with preconditions, range bounds, uncertainty rules, and pause/resume modal.
-   - **Policies Engine (`PoliciesView.tsx`):** Filterable policy cards list, dual-pane inspector with exact rule specifications, trigger scopes, and safety containment directives.
-   - **Approval Inbox (`ApprovalsView.tsx`):** Tri-State governance separation, Plain-Language action synopsis, 6 domain evidence check badges, raw JSON payload viewer, role selector, mandatory written justification, and Approve & Execute / Reject controls.
-   - **Incidents & Containment (`IncidentsView.tsx`):** High-alert red containment banner, closed signature triage, lifecycle timeline, and complete 11-section accountability report viewer.
-   - **Corrections & Recovery (`CorrectionsView.tsx`):** Unified code/config diff viewer, validation check matrix (Structural S1–S6, Behavioural B1–B6, Diff Guard), and Central Recovery Gate R1–R9 checklist with sandbox verification and recovery execution.
-   - **Tasks & Execution (`TasksView.tsx`):** Task registry table, task details, intake form, and human escalation controls.
-   - **Audit Trail (`AuditLogView.tsx`):** SHA-256 hash linkage strip, audit event table, event inspector with parent/current hashes, and live cryptographic verification trigger.
-4. **Scenario Launcher Modal (`ScenarioLauncherModal.tsx`):** 1-click execution for Defence Scenarios 1–5 (and 2A, 2C), showing live gate verdicts (`ALLOW`, `REQUIRE_APPROVAL`, `BLOCK`) and jumping directly into review or incident consoles.
-5. **Browser Verification & Recording:** Automated browser subagent rehearsal executed end-to-end and recorded to WebP video (`aegisos_stitch_ui_rehearsal_1791773906117.webp`).
+The institutional-grade **Stitch UI** design system from `stitch_ai_agent_governance_os (6).zip` has been fully implemented into the React 19 + Vite frontend and integrated with the deterministic Express + SQLite backend.
+
+### 11.1 Design System & Aesthetic Tokens
+In accordance with `DESIGN.md`, the operator console enforces an authoritative, high-density mission-critical design language:
+- **Typography:** Inter for structured typographic hierarchy and JetBrains Mono for cryptographic hashes, timestamps, and parameters.
+- **Iconography:** Google Material Symbols Outlined.
+- **Color Palette & Tokens:** Calibrated cool base canvas (`#faf9fd`), surface containers (`#efedf1`, `#ffffff`), boundary hairlines (`#c7c4d8`), focused indigo accents (`#4f46e5`), and distinct status indicators:
+  - `ALLOW` (Emerald `#15803d` / `#dcfce7`)
+  - `REQUIRE_APPROVAL` (Amber `#b45309` / `#fef3c7`)
+  - `BLOCK` (Rose `#ba1a1a` / `#ffdad6`)
+- **Strict Boundary Invariant:** Persistent top warning banner reading `Demo Environment — Synthetic, Non-Operational Data Only • No Live Weapons or Classified Networks`.
+
+---
+
+### 11.2 Shell Architecture & Navigation
+
+1. **Persistent Header & Notice Banner (`frontend/src/components/Header.tsx`):**
+   - **Sticky Notice Banner:** Clear demarcation of synthetic demonstration status.
+   - **Top Controls:** AegisOS brand shield logo, global search bar with `⌘K` shortcut, live active enforcement pulse, notifications counter, Quick Scenario Launcher button, and authenticated reviewer profile (`Elena Vance · Delegated Approver L3`).
+2. **Navigation Rail (`frontend/src/components/Sidebar.tsx`):**
+   - **Operational Control:** Overview, Agents Fleet, Policies, Approvals (dynamic badge count with amber alert), Incidents (dynamic badge count with red alert), Corrections & Sandbox.
+   - **Execution & Governance:** Tasks & Intake, Audit Log.
+   - **Session Auth Card:** Displays cryptographic live-signing status and reviewer ID (`#EV-9942`).
+
+---
+
+### 11.3 Integrated Operational Screens & Backend Endpoints
+
+| View | Component File | Backend Endpoints | Features & Capabilities |
+|---|---|---|---|
+| **Overview** | `frontend/src/components/OverviewView.tsx` | `GET /api/dashboard/overview`<br>`GET /api/audit` | 4 summary KPI cards, "Needs Your Attention" queue with direct "Review"/"Investigate" action triggers, fleet status table, 24h policy outcomes distribution bar, and recent audit activity feed. |
+| **Agents Fleet** | `frontend/src/components/AgentsView.tsx` | `GET /api/agents`<br>`POST /api/agents/:id/pause`<br>`POST /api/agents/:id/resume` | Fleet table with category & risk tier filtering. Slide-out **Agent Details Inspection Drawer** displaying operational purpose, permitted operations, resource perimeters, telemetry freshness window (e.g. 300s), numerical range bounds (vibration, temp, pressure), and pause/resume modal dialogs. |
+| **Policies** | `frontend/src/components/PoliciesView.tsx` | `GET /api/policies` | Dual-pane split view. Filterable policy cards on the left; policy rule inspector on the right displaying target agent, operation, resource regex, containment directives, and deterministic explanation. |
+| **Approval Inbox** | `frontend/src/components/ApprovalsView.tsx` | `GET /api/approvals`<br>`POST /api/approvals/:id/decide` | **Tri-State Governance Separation** (1. Policy Decision, 2. Approval Status, 3. Execution Status). Plain-language synopsis, 6 domain evidence check badges, raw JSON payload viewer, role selector (`usr-reviewer`/`usr-admin`), mandatory written justification, and atomic CAS Approve & Execute / Reject controls. |
+| **Incidents** | `frontend/src/components/IncidentsView.tsx` | `GET /api/incidents`<br>`POST /api/incidents/:id/triage`<br>`GET /api/incidents/:id/report` | Red high-alert containment banner, incident list, closed signature triage trigger (`SIG-CYBER-CONTAINMENT-01`), lifecycle timeline, and complete **11-Section Accountability Incident Report** viewer. |
+| **Corrections** | `frontend/src/components/CorrectionsView.tsx` | `GET /api/corrections`<br>`POST /api/corrections/:id/verify-sandbox`<br>`POST /api/corrections/:id/execute` | Unified code diff viewer with syntax highlighting. Validation Check Matrix (Structural S1–S6, Behavioural B1–B6, Diff Guard against permission widening) and **Central Recovery Gate R1–R9** checklist with "Run Sandbox Verification" and "Execute Recovery & Resume" actions. |
+| **Tasks** | `frontend/src/components/TasksView.tsx` | `GET /api/tasks`<br>`POST /api/tasks` | Task registry table, task intake registration form with agent and operation selection, priority badges, and human escalation boundaries. |
+| **Audit Log** | `frontend/src/components/AuditLogView.tsx` | `GET /api/audit`<br>`POST /api/audit/verify` | Tamper-evident SHA-256 hash linkage strip (`Genesis -> EVT -> HEAD`), event table with filtering, raw JSON inspector with parent/current hash pairs, and live "Verify Cryptographic Chain" action. |
+
+---
+
+### 11.4 Interactive Scenario Quick-Launcher (`frontend/src/components/ScenarioLauncherModal.tsx`)
+
+Accessible directly from the header's **"Run Scenarios"** button, enabling 1-click execution for testing gate evaluation and human oversight:
+- **Scenario 1 (Permitted Maintenance):** Fresh turbine telemetry dispatches `create_maintenance_ticket` ➔ Evaluates to `ALLOW` ➔ HMAC execution token issued.
+- **Scenario 2 (Stale Telemetry Hold):** Telemetry older than configured window dispatches ➔ Evaluates to `REQUIRE_APPROVAL` (`STALE_TELEMETRY_HELD_FOR_HUMAN`) ➔ One-click button jumps straight to the Approval Inbox.
+- **Scenario 2A (Missing Mandatory Fields):** Telemetry payload missing mandatory sensor fields ➔ Evaluates to `BLOCK`.
+- **Scenario 2C (Out-of-Bounds Sensor Values):** Vibration sensor reporting 28.5 RMS (limit: 15.0) ➔ Evaluates to `BLOCK`.
+- **Scenario 3 (Prohibited Cyber Action):** Attempted `wipe_credentials` ➔ Evaluates to `BLOCK` ➔ Agent paused immediately, security incident opened.
+- **Scenario 4 (Conflicting Reconnaissance Reports):** Contradictory UAV vs Radar observation vectors ➔ Evaluates to `REQUIRE_APPROVAL` ➔ Held for human intelligence analyst.
+
+---
+
+### 11.5 Build & Verification Baseline
+
+| Verification Check | Execution Command | Result | Technical Details |
+|---|---|:---:|---|
+| **Test Suite** | `npm test` | **PASS (57/57)** | 11 test files passing in ~3.0s |
+| **Backend Compilation** | `npm --prefix backend run build` | **PASS** | Clean compilation via `tsc` (zero TypeScript errors) |
+| **Frontend Production Build** | `npm --prefix frontend run build` | **PASS** | Clean build via `tsc -b && vite build` (365 kB bundle, zero errors) |
+| **Database Migration & Reset** | `npm run seed` | **PASS** | SQLite tables cleanly dropped and seeded with defence agents & policies |
+| **End-to-End Browser Rehearsal** | Automated browser subagent | **PASS** | Captured walkthrough video recording and screenshots |
+| **Git Synchronization** | `git push` | **PUSHED** | Synced to `origin/main` repository |
+
