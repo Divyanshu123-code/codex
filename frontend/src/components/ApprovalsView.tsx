@@ -25,6 +25,26 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
   const [decisionResult, setDecisionResult] = useState<any>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showRawPayload, setShowRawPayload] = useState(false);
+  const [aiExplanation, setAiExplanation] = useState<string | null>(null);
+  const [isExplaining, setIsExplaining] = useState(false);
+
+  const handleFetchAiExplanation = async () => {
+    if (!selectedApproval) return;
+    setIsExplaining(true);
+    try {
+      const res = await fetch(`/api/actions/explain/${selectedApproval.request_id}`, {
+        method: 'POST'
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAiExplanation(data.explanation);
+      }
+    } catch (err) {
+      console.error('Failed to get AI explanation:', err);
+    } finally {
+      setIsExplaining(false);
+    }
+  };
 
   const pendingCount = approvals.filter(a => a.status === 'PENDING').length;
   const approvedCount = approvals.filter(a => a.status === 'APPROVED').length;
@@ -319,7 +339,7 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
             </div>
 
             {/* SECTION B · REASON CODE & EXPLANATION */}
-            <div>
+            <div className="space-y-2">
               <span className="text-[0.625rem] font-bold uppercase tracking-wider text-slate-400 block mb-1">
                 SECTION B · GATE EVALUATION & REASON CODE
               </span>
@@ -333,6 +353,33 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
                 <p className="text-[0.6875rem] text-amber-800/90 leading-relaxed">
                   {selectedApproval.request_explanation || 'Telemetry quality preconditions require human evaluation.'}
                 </p>
+              </div>
+
+              {/* L2 AI Plain-Language Review */}
+              <div className="p-3 rounded-lg bg-indigo-50/60 border border-indigo-200 space-y-1.5 text-xs">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-indigo-900 font-bold text-[0.6875rem]">
+                    <span className="material-symbols-outlined text-indigo-600 text-[1rem]">psychology</span>
+                    <span>AI Governance Advisor (Plain-Language L2)</span>
+                  </div>
+                  <button
+                    onClick={handleFetchAiExplanation}
+                    disabled={isExplaining}
+                    className="px-2 py-0.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-mono text-[0.625rem] transition-colors flex items-center gap-1"
+                  >
+                    <span className={`material-symbols-outlined text-[0.875rem] ${isExplaining ? 'animate-spin' : ''}`}>auto_awesome</span>
+                    {isExplaining ? 'Synthesizing...' : aiExplanation ? 'Re-analyze' : 'Analyze Request'}
+                  </button>
+                </div>
+                {aiExplanation ? (
+                  <p className="text-[0.6875rem] text-indigo-950/90 leading-relaxed bg-white/70 p-2 rounded border border-indigo-100">
+                    {aiExplanation}
+                  </p>
+                ) : (
+                  <p className="text-[0.625rem] text-indigo-700/80 italic">
+                    Click "Analyze Request" to generate an untrusted plain-language governance brief explaining policy limits and telemetry nuances.
+                  </p>
+                )}
               </div>
             </div>
 

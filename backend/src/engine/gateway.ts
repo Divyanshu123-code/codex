@@ -189,7 +189,8 @@ export function routeAction(
     decision: p.decision,
     severity: p.severity,
     pause_on_violation: p.pause_on_violation,
-    open_incident: p.open_incident
+    open_incident: p.open_incident,
+    max_auto_amount: p.max_auto_amount != null ? Number(p.max_auto_amount) : null
   }));
 
   // 3. Fetch Operations Catalog
@@ -365,6 +366,9 @@ export function routeAction(
     }
   }
 
+  const policyHash = crypto.createHash('sha256').update(JSON.stringify(policies)).digest('hex');
+  const reqAmount = typeof action.parameters?.amount === 'number' ? action.parameters.amount : null;
+
   if (evaluation.decision === 'REQUIRE_APPROVAL') {
     // Record pending approval
     const approvalId = `appr-${requestId}`;
@@ -386,6 +390,24 @@ export function routeAction(
       WHERE id = ?
     `).run(now, requestId);
 
+    // Record immutable policy threat backup (Section 6b/6c)
+    const backup = recordScenarioBackup(targetDb, {
+      requestId,
+      correlationId: requestId,
+      agentId: action.agent_id,
+      agentCategory: agent ? agent.agent_category : 'unknown',
+      policyId: evaluation.policyId || null,
+      policyVersion: evaluation.policyVersion || null,
+      policyHash,
+      operation: action.operation,
+      amount: reqAmount,
+      parameters: action.parameters || {},
+      evidenceChecks: evaluation.evidenceChecks,
+      decision: 'REQUIRE_APPROVAL',
+      reasonCode: evaluation.reasonCode,
+      approvalId
+    });
+
     writeAuditEvent({
       eventType: 'APPROVAL_REQUESTED',
       actorType: 'system',
@@ -400,7 +422,7 @@ export function routeAction(
       requestId,
       incidentId: null,
       correctionId: null,
-      safeDetails: { approvalId, status: 'PENDING' }
+      safeDetails: { approvalId, status: 'PENDING', backupId: backup.backupId, snapshotHash: backup.snapshotHash }
     }, targetDb);
 
     return {
@@ -447,6 +469,24 @@ export function routeAction(
     );
   }
 
+  // Record immutable policy threat backup for blocked attempts (Section 6b/6c)
+  const blockBackup = recordScenarioBackup(targetDb, {
+    requestId,
+    correlationId: requestId,
+    agentId: action.agent_id,
+    agentCategory: agent ? agent.agent_category : 'unknown',
+    policyId: evaluation.policyId || null,
+    policyVersion: evaluation.policyVersion || null,
+    policyHash,
+    operation: action.operation,
+    amount: reqAmount,
+    parameters: action.parameters || {},
+    evidenceChecks: evaluation.evidenceChecks,
+    decision: 'BLOCK',
+    reasonCode: evaluation.reasonCode,
+    approvalId: null
+  });
+
   // If policy dictates pause_on_violation
   if (evaluation.pauseOnViolation && agent) {
     transitionAgentStatus(agent.id, 'paused', { type: 'system', id: 'policy-enforcer' }, `High severity violation on policy ${evaluation.policyId}`, targetDb);
@@ -466,7 +506,13 @@ export function routeAction(
     requestId,
     incidentId,
     correctionId: null,
-    safeDetails: { reasonCode: evaluation.reasonCode, incidentOpened: !!incidentId, agentPaused: evaluation.pauseOnViolation }
+    safeDetails: {
+      reasonCode: evaluation.reasonCode,
+      incidentOpened: !!incidentId,
+      agentPaused: evaluation.pauseOnViolation,
+      backupId: blockBackup.backupId,
+      snapshotHash: blockBackup.snapshotHash
+    }
   }, targetDb);
 
   return {
@@ -479,4 +525,71 @@ export function routeAction(
     evidenceChecks: evaluation.evidenceChecks,
     incidentId: incidentId || undefined
   };
+}
+
+/**
+ * Record immutable policy threat backup for human review & wrong-call recovery (Section 6b/6c)
+ */
+export function recordScenarioBackup(
+  targetDb: DatabaseSync,
+  data: {
+    requestId: string;
+    correlationId: string;
+    agentId: string;
+    agentCategory: string;
+    policyId: string | null;
+    policyVersion: string | null;
+    policyHash: string | null;
+    operation: string;
+    amount: number | null;
+    parameters: any;
+    evidenceChecks: any;
+    decision: string;
+    reasonCode: string;
+    approvalId: string | null;
+  }
+): { backupId: string; snapshotHash: string } {
+  const backupId = `sbkp-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+  const now = Date.now();
+  const snapshotPayload = JSON.stringify({
+    backupId,
+    requestId: data.requestId,
+    agentId: data.agentId,
+    operation: data.operation,
+    amount: data.amount,
+    parameters: data.parameters,
+    decision: data.decision,
+    reasonCode: data.reasonCode,
+    timestamp: now
+  });
+  const snapshotHash = crypto.createHash('sha256').update(snapshotPayload).digest('hex');
+
+  targetDb.prepare(`
+    INSERT INTO scenario_backups (
+      id, correlation_id, request_id, agent_id, agent_category, policy_id, policy_version,
+      policy_hash, operation, amount, parameters_snapshot, evidence_checks, decision,
+      reason_code, approval_id, execution_status, snapshot_hash, created_at, correction_status
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'NOT_EXECUTED', ?, ?, 'NONE')
+  `).run(
+    backupId,
+    data.correlationId,
+    data.requestId,
+    data.agentId,
+    data.agentCategory,
+    data.policyId,
+    data.policyVersion,
+    data.policyHash,
+    data.operation,
+    data.amount,
+    JSON.stringify(data.parameters || {}),
+    data.evidenceChecks ? JSON.stringify(data.evidenceChecks) : null,
+    data.decision,
+    data.reasonCode,
+    data.approvalId,
+    snapshotHash,
+    now
+  );
+
+  return { backupId, snapshotHash };
 }

@@ -51,7 +51,8 @@ actionsRouter.post('/evaluate', (req: Request, res: Response) => {
       decision: p.decision,
       severity: p.severity,
       pause_on_violation: p.pause_on_violation,
-      open_incident: p.open_incident
+      open_incident: p.open_incident,
+      max_auto_amount: p.max_auto_amount != null ? Number(p.max_auto_amount) : null
     }));
 
     // 3. Fetch Operations Catalog
@@ -101,6 +102,27 @@ actionsRouter.post('/route', (req: Request, res: Response) => {
     );
 
     res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/actions/explain/:id (L2 Plain-Language Request Review Explanation, Spec 6e)
+actionsRouter.post('/explain/:id', async (req: Request, res: Response) => {
+  try {
+    const db = getDatabase();
+    const reqRow = db.prepare('SELECT * FROM action_requests WHERE id = ?').get(req.params.id) as any;
+    if (!reqRow) {
+      return res.status(404).json({ error: 'Action request not found' });
+    }
+
+    const { explainGateDecision } = await import('../engine/llmClient.js');
+    const result = await explainGateDecision(req.params.id, reqRow, db);
+
+    res.json({
+      requestId: req.params.id,
+      ...result
+    });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

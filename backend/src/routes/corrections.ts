@@ -76,3 +76,38 @@ correctionsRouter.post('/:id/apply', (req: Request, res: Response) => {
     res.status(400).json({ error: err.message });
   }
 });
+
+// POST /api/corrections/propose-patch (L1 Debug Agent Patch Proposer, Spec 6e)
+correctionsRouter.post('/propose-patch', async (req: Request, res: Response) => {
+  try {
+    const { incidentId } = req.body;
+    if (!incidentId) {
+      return res.status(400).json({ error: 'incidentId is required' });
+    }
+
+    const db = getDatabase();
+    const inc = db.prepare('SELECT * FROM incidents WHERE id = ?').get(incidentId) as any;
+    if (!inc) {
+      return res.status(404).json({ error: 'Incident not found' });
+    }
+
+    const agent = db.prepare('SELECT * FROM agents WHERE id = ?').get(inc.agent_id) as any;
+    const workflowConfig = agent ? JSON.parse(agent.workflow_config || '[]') : [];
+
+    const { proposeCorrectionPatch } = await import('../engine/llmClient.js');
+    const result = await proposeCorrectionPatch(
+      incidentId,
+      inc.signature_id || 'SIG-DISALLOWED-OP',
+      workflowConfig,
+      db
+    );
+
+    res.json({
+      incidentId,
+      ...result
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+

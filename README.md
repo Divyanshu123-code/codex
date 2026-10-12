@@ -6,7 +6,7 @@
 [![Node.js](https://img.shields.io/badge/Node.js-22%20%7C%2026-brightgreen.svg)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue.svg)](https://www.typescriptlang.org)
 [![Vite](https://img.shields.io/badge/Frontend-React%2019%20%2B%20Vite-646CFF.svg)](https://vitejs.dev)
-[![Tests](https://img.shields.io/badge/Tests-57%20passing%20%2F%2011%20suites-success.svg)]()
+[![Tests](https://img.shields.io/badge/Tests-67%20passing%20%2F%2012%20suites-success.svg)]()
 [![License](https://img.shields.io/badge/Classification-UNCLASSIFIED%20%2F%20SYNTHETIC-orange.svg)]()
 
 > **⚠️ DEMO ENVIRONMENT NOTICE & DEFENCE SCOPE DISCLAIMER:**  
@@ -100,7 +100,7 @@ flowchart TD
 
         G --> O["Containment: Auto-Pause Agent & Log Incident"]
         C1 --> O
-        D1 --> O
+        D1 --> D1_BLOCK["BLOCK: Zero Tool Execution (Sensor Out of Bounds)"]
         O --> P["Emit Tamper-Evident SHA-256 Audit Event"]
     end
 
@@ -122,7 +122,7 @@ flowchart TD
     C --> D{"Reviewer Role & Decision"}
     
     D -- "Reject with Written Reason" --> E["Atomic CAS: State -> REJECTED"]
-    E --> F["Action Terminated (Zero Execution Ever)"]
+    E --> F["Action Terminated (Zero Execution unless reopened via backup re-review)"]
     
     D -- "Approve with Written Rationale" --> G["Atomic CAS: State -> APPROVED"]
     G --> H{"Post-Approval Revalidation"}
@@ -141,11 +141,11 @@ flowchart TD
 ---
 
 ### Flowchart 3: Closed Diagnostics, Sandbox Regression & Central Recovery Gate (R1–R9)
-When an agent is paused due to a violation, AegisOS enforces a closed diagnostic triage, sandbox verification, and a central recovery checklist to prevent permission widening.
+When an agent is paused due to a violation, AegisOS enforces closed diagnostic signature triage, sandbox verification, and a central recovery checklist to prevent permission widening.
 
 ```mermaid
 flowchart TD
-    A["High-Severity Breach (e.g. SIG-PROHIBITED-OP-001)"] --> B["Agent PAUSED & Incident Logged"]
+    A["High-Severity Breach (e.g. SIG-DISALLOWED-OP)"] --> B["Agent PAUSED & Incident Logged"]
     B --> C["Closed Diagnostic Engine Classifies Signature"]
     C --> D["Generate Correction Proposal (Code/Config Patch)"]
     
@@ -161,11 +161,11 @@ flowchart TD
     I -- "Success" --> K["Human Reviewer Approves Verified Patch"]
     
     subgraph Gate ["Central Recovery Gate (R1 - R9 Checklist)"]
-        K --> L{"R1: Active Incident Open?"}
-        L --> M{"R2: Diagnostic Signature Match?"}
-        M --> N{"R3: Sandbox Regression Complete?"}
-        N --> O{"R4: Zero Permission Widening?"}
-        O --> P{"R5 - R9: Operator Role & Authorization?"}
+        K --> L{"R1: Caller is Admin & R2: Written Reason?"}
+        L --> M{"R3: Agent & Policy Exist?"}
+        M --> N{"R4 - R5: Signature Diagnosis Recorded?"}
+        N --> O{"R6: Applied Correction Verified (PASS)?"}
+        O --> P{"R7: Separation of Duties & R8: Policy Hash Match?"}
     end
     
     P -- "All Passed" --> Q["Agent Restored to ACTIVE Status"]
@@ -197,26 +197,28 @@ codex/
 │   │   │   ├── incidentReport.ts   # 11-section formal accountability report generator
 │   │   │   └── audit.ts            # Tamper-evident SHA-256 hash-chained ledger
 │   │   ├── tools/
-│   │   │   └── protectedSimulator.ts # Protected simulated tool implementations
-│   │   ├── routes/                 # Express REST API routes
+│   │   │   └── protectedTools.ts     # Protected simulated tool implementations
+│   │   │   └── protectedTools.ts     # Protected simulated tool implementations
+│   │   ├── routes/                 # Express REST API routes (actions, agents, backups, demo, etc.)
 │   │   ├── db/                     # SQLite schema & synthetic test fixtures
 │   │   └── types/                  # Shared domain types
-│   └── tests/                      # 11 Vitest test suites (57 passing tests)
+│   └── tests/                      # 12 Vitest test suites (67 passing tests)
 │
 └── frontend/                       # React 19 + Vite + Tailwind Operator Console
     └── src/
         ├── components/
-        │   ├── Header.tsx          # Institutional header with demo banner & pulse
-        │   ├── Sidebar.tsx         # Section navigation with dynamic counters
-        │   ├── OverviewView.tsx    # Governance status, KPI metrics & attention panel
-        │   ├── AgentsView.tsx      # Agent fleet registry with slide-out drawer
-        │   ├── PoliciesView.tsx    # Versioned policy explorer & rule inspector
-        │   ├── ApprovalsView.tsx   # Tri-state dual-custody approval workbench
-        │   ├── IncidentsView.tsx   # Incident response & 11-section report viewer
-        │   ├── CorrectionsView.tsx # Diff viewer, sandbox test matrix & R1–R9 gate
-        │   ├── TasksView.tsx       # Intake task registry & human escalation bounds
-        │   ├── AuditLogView.tsx    # Tamper-evident hash strip & event inspector
-        │   └── ScenarioLauncherModal.tsx # Interactive 1-click test scenario runner
+            ├── Header.tsx          # Institutional header with demo banner & pulse
+            ├── Sidebar.tsx         # Section navigation with dynamic counters
+            ├── OverviewView.tsx    # Governance status, KPI metrics & attention panel
+            ├── AgentsView.tsx      # Agent fleet registry with slide-out drawer
+            ├── PoliciesView.tsx    # Versioned policy explorer & rule inspector
+            ├── ApprovalsView.tsx   # Tri-state dual-custody approval workbench
+            ├── IncidentsView.tsx   # Incident response & 11-section report viewer
+            ├── CorrectionsView.tsx # Diff viewer, sandbox test matrix & R1–R9 gate
+            ├── TasksView.tsx       # Intake task registry & human escalation bounds
+            ├── AuditLogView.tsx    # Tamper-evident hash strip & event inspector
+            ├── BackupsView.tsx     # Immutable scenario backups, re-review & reinstatement
+            └── ScenarioLauncherModal.tsx # Interactive 1-click test scenario runner
         ├── types.ts                # Frontend interfaces
         └── App.tsx                 # Real-time state synchronization
 ```
@@ -233,14 +235,16 @@ AegisOS includes built-in synthetic test scenarios mirroring realistic high-cons
 | **Scenario 2** | Predictive Maintenance | Telemetry analysis with stale data (>3600s) | `REQUIRE_APPROVAL` | Ticket held in queue; zero tool mutation. Human reviewer inspects evidence and authorizes ticket with written rationale. |
 | **Scenario 3** | Cybersecurity Monitoring | Unauthorized `wipe_credentials` execution | `BLOCK` | Operation blocked before execution. Agent paused, containment incident logged, protected enclave untouched. |
 | **Scenario 4** | Tactical Decision Support | Ingest contradictory UAV vs Radar reconnaissance | `REQUIRE_APPROVAL` | Conflicting sensor vectors detected; recommendation held for human intelligence analyst validation. |
-| **Scenario 5** | System Recovery & Repair | Patch proposal with Diff Guard validation | `VERIFIED` | Patch tested in sandbox (S1–S6, B1–B6). Central Resume Gate validates R1–R9 checklist before agent restoration. |
+| **Scenario 5** | System Recovery & Repair | Patch proposal with Diff Guard validation | `RECOVERY FLOW` | Patch tested in sandbox (S1–S6, B1–B6). Central Resume Gate validates R1–R9 checklist before agent restoration. |
+| **Scenario 6** | Finance / Delegated Ops | Delegated refund ($4,000 <= $5,000 auto limit) | `ALLOW` | Autonomous threshold met; payment executed directly in synthetic protected ledger. |
+| **Scenario 7** | Finance / Delegated Ops | Delegated refund ($6,000 > $5,000 auto limit) | `REQUIRE_APPROVAL` | Threshold exceeded; held for dual-custody approval. Auto-creates immutable SHA-256 scenario backup for administrative re-review. |
 
 ---
 
 ## ⚡ 6. Quickstart & Installation
 
 ### Prerequisites
-- **Node.js** >= 20 (Node 22 or Node 26 recommended)
+- **Node.js** >= 22.5 (Node 22.5+ or Node 26 required for native `node:sqlite`)
 - **npm** >= 10
 
 ### 1. Installation
@@ -263,11 +267,11 @@ npm run seed
 ```
 
 ### 3. Run Automated Tests
-Execute the full test suite comprising 57 automated tests across 11 test files:
+Execute the full test suite comprising 67 automated tests across 12 test files:
 ```bash
 npm test
 ```
-*All 57 tests validate deterministic policy decisions, sensor bounds, stale telemetry holds, prohibited containment, atomic CAS approvals, Diff Guard rejections, and R1–R9 resume gates.*
+*All 67 tests validate deterministic policy decisions, sensor bounds, stale telemetry holds, prohibited containment, atomic CAS approvals, Diff Guard rejections, scenario backups, administrative reopening, and R1–R9 resume gates.*
 
 ### 4. Launch the Platform
 Start the backend API server and frontend operator console:
@@ -311,7 +315,7 @@ The **AegisOS Operator Console** provides an institutional, military-grade inter
 
 | Metric | Status | Detail |
 | :--- | :--- | :--- |
-| **Backend Unit & Integration Tests** | ✅ 57 / 57 Passing | 11 test suites covering engine, gateway, approvals, sandbox, and scenarios. |
+| **Backend Unit & Integration Tests** | ✅ 67 / 67 Passing | 12 test suites covering engine, gateway, approvals, sandbox, backups, and scenarios. |
 | **Frontend Production Build** | ✅ 0 Errors | Pure TypeScript strict mode + Vite build (`tsc -b && vite build`). |
 | **LLM Dependency in Decision Path** | ❌ None (0%) | 100% deterministic TypeScript evaluation. |
 | **Rehearsal & Reset** | ✅ Verified | Clean database reset and state re-seeding supported via `npm run seed`. |

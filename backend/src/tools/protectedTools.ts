@@ -11,6 +11,7 @@ export interface SyntheticStorageState {
   enclaves: Map<string, any>;
   reconReports: Map<string, any>;
   briefings: Map<string, any>;
+  refunds: Map<string, any>;
 }
 
 const initialTelemetry: Array<[string, any]> = [
@@ -40,7 +41,8 @@ const syntheticState: SyntheticStorageState = {
     ['synthetic://enclaves/perimeter_firewall', { rule_count: 42, active_blocks: ['203.0.113.5'] }]
   ]),
   reconReports: new Map(initialRecon),
-  briefings: new Map()
+  briefings: new Map(),
+  refunds: new Map()
 };
 
 export function getSyntheticStorageState(): {
@@ -50,6 +52,7 @@ export function getSyntheticStorageState(): {
   telemetry: Record<string, any>;
   maintenanceTickets: Record<string, any>;
   enclaves: Record<string, any>;
+  refunds: Record<string, any>;
 } {
   return {
     documents: Object.fromEntries(syntheticState.documents),
@@ -57,7 +60,8 @@ export function getSyntheticStorageState(): {
     archive: Object.fromEntries(syntheticState.archive),
     telemetry: Object.fromEntries(syntheticState.telemetry),
     maintenanceTickets: Object.fromEntries(syntheticState.maintenanceTickets),
-    enclaves: Object.fromEntries(syntheticState.enclaves)
+    enclaves: Object.fromEntries(syntheticState.enclaves),
+    refunds: Object.fromEntries(syntheticState.refunds)
   };
 }
 
@@ -79,6 +83,7 @@ export function resetSyntheticStorage(): void {
   ]);
   syntheticState.reconReports = new Map(initialRecon);
   syntheticState.briefings.clear();
+  syntheticState.refunds.clear();
 }
 
 // PRIVATE TOOLS - NEVER EXPORTED DIRECTLY (No bypass invariant)
@@ -191,6 +196,34 @@ function _toolProposeTacticalRecommendation(resource: string, params: any): any 
   return record;
 }
 
+function _toolIssueRefund(resource: string, params: any): any {
+  const orderId = params.order_id || resource.split('/').pop() || 'ORD-DEFAULT';
+  const idempotencyKey = params.idempotency_key || `idem-${orderId}-${params.amount}`;
+
+  if (syntheticState.refunds.has(idempotencyKey)) {
+    const existing = syntheticState.refunds.get(idempotencyKey);
+    return {
+      status: 'DUPLICATE_IGNORED',
+      refund_id: existing.refund_id,
+      amount: existing.amount,
+      message: 'Idempotent request: refund already executed. No double payout occurred.'
+    };
+  }
+
+  const refundId = `REFUND-SYN-${Date.now().toString(36).toUpperCase()}`;
+  const record = {
+    refund_id: refundId,
+    order_id: orderId,
+    amount: params.amount,
+    currency: params.currency || 'USD',
+    idempotency_key: idempotencyKey,
+    status: 'REFUND_EXECUTED',
+    timestamp: Date.now()
+  };
+  syntheticState.refunds.set(idempotencyKey, record);
+  return record;
+}
+
 export function generateExecutionToken(requestId: string, operation: string, resource: string, secret: string): string {
   return crypto.createHmac('sha256', secret)
     .update(`${requestId}:${operation}:${resource}`)
@@ -262,6 +295,9 @@ export function executeProtectedTool(
       break;
     case 'propose_tactical_recommendation':
       result = _toolProposeTacticalRecommendation(resource, params);
+      break;
+    case 'issue_refund':
+      result = _toolIssueRefund(resource, params);
       break;
     default:
       throw new Error(`Unknown protected operation: ${operation}`);

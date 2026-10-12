@@ -31,6 +31,7 @@ export interface PolicyRecord {
   severity: 'low' | 'medium' | 'high' | 'critical';
   pause_on_violation: number;
   open_incident: number;
+  max_auto_amount?: number | null;
 }
 
 export interface OperationCatalogRecord {
@@ -211,6 +212,24 @@ export function evaluatePolicy(
         openIncident: false,
         evidenceChecks: qualityResult
       };
+    }
+
+    // 6b. Delegated Authority Threshold Check (Monetary / Numerical Bounds, e.g. Refund <= $5000)
+    if (selectedPolicy.decision === 'allow' && selectedPolicy.max_auto_amount != null) {
+      const reqAmount = typeof action.parameters?.amount === 'number' ? action.parameters.amount : null;
+      if (reqAmount !== null && reqAmount > selectedPolicy.max_auto_amount) {
+        return {
+          decision: 'REQUIRE_APPROVAL',
+          reasonCode: 'THRESHOLD_EXCEEDED_REQUIRES_APPROVAL',
+          explanation: `Requested amount of $${reqAmount} exceeds delegated auto-approval threshold of $${selectedPolicy.max_auto_amount} under policy ${selectedPolicy.id}. Elevated to human approval.`,
+          policyId: selectedPolicy.id,
+          policyVersion: selectedPolicy.version,
+          severity: 'medium',
+          pauseOnViolation: false,
+          openIncident: false,
+          evidenceChecks: qualityResult
+        };
+      }
     }
 
     let finalDecision: 'ALLOW' | 'REQUIRE_APPROVAL' =

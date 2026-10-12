@@ -51,6 +51,14 @@ export function decideApproval(
     throw new Error(`Approval record ${approvalId} not found.`);
   }
 
+  // Separation of duties on reopened approvals (Section 6c)
+  if (approvalRow.reopened_from_id) {
+    const origAppr = targetDb.prepare('SELECT approver_id FROM approvals WHERE id = ?').get(approvalRow.reopened_from_id) as any;
+    if (origAppr && origAppr.approver_id === approver.id) {
+      throw new Error('SEPARATION_OF_DUTIES_VIOLATION: Cannot approve a reopened request that you previously rejected.');
+    }
+  }
+
   const requestId = approvalRow.request_id;
   const now = Date.now();
 
@@ -94,6 +102,23 @@ export function decideApproval(
       SET status = 'NOT_EXECUTED', non_execution_reason = 'APPROVAL_REJECTED', executed_at = ?
       WHERE request_id = ?
     `).run(now, requestId);
+
+    try {
+      const decisionDetails = JSON.stringify({
+        approverId: approver.id,
+        approverRole: approver.role,
+        decision,
+        reason,
+        decidedAt: now
+      });
+      targetDb.prepare(`
+        UPDATE scenario_backups
+        SET human_decision = ?, execution_status = 'NOT_EXECUTED'
+        WHERE request_id = ?
+      `).run(decisionDetails, requestId);
+    } catch {
+      // Table may not exist or row missing
+    }
 
     writeAuditEvent({
       eventType: 'NOT_EXECUTED',
@@ -142,7 +167,8 @@ export function decideApproval(
     decision: p.decision,
     severity: p.severity,
     pause_on_violation: p.pause_on_violation,
-    open_incident: p.open_incident
+    open_incident: p.open_incident,
+    max_auto_amount: p.max_auto_amount != null ? Number(p.max_auto_amount) : null
   }));
 
   const opRows = targetDb.prepare('SELECT * FROM operations_catalog').all() as any[];
@@ -248,6 +274,24 @@ export function decideApproval(
     SET status = 'SUCCEEDED', duration_ms = ?, result_reference = ?, executed_at = ?
     WHERE request_id = ?
   `).run(toolResult.durationMs, JSON.stringify(toolResult.result), Date.now(), requestId);
+
+  try {
+    const decisionDetails = JSON.stringify({
+      approverId: approver.id,
+      approverRole: approver.role,
+      decision,
+      reason,
+      decidedAt: now
+    });
+    targetDb.prepare(`
+      UPDATE scenario_backups
+      SET human_decision = ?, execution_status = 'SUCCEEDED',
+          correction_status = CASE WHEN correction_status = 'REOPENED' THEN 'CORRECTED' ELSE correction_status END
+      WHERE request_id = ?
+    `).run(decisionDetails, requestId);
+  } catch {
+    // Ignore if table missing or row absent
+  }
 
   writeAuditEvent({
     eventType: 'EXECUTION_SUCCEEDED',

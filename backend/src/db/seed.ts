@@ -9,6 +9,8 @@ export function seedDatabase(db?: DatabaseSync): void {
   
   // Cleanly drop tables if they exist to apply latest constraints and types
   targetDb.exec(`
+    DROP TABLE IF EXISTS scenario_backups;
+    DROP TABLE IF EXISTS backups;
     DROP TABLE IF EXISTS audit_events;
     DROP TABLE IF EXISTS corrections;
     DROP TABLE IF EXISTS incidents;
@@ -57,6 +59,7 @@ export function seedDatabase(db?: DatabaseSync): void {
   insertOp.run('propose_tactical_recommendation', 'Formulate tactical recommendation for human commander review', 0, 1, 0.08);
   insertOp.run('wipe_credentials', 'Prohibited destruction of authentication credentials', 1, 1, 0.50);
   insertOp.run('purge_security_logs', 'Prohibited deletion of boundary security event logs', 1, 1, 0.50);
+  insertOp.run('issue_refund', 'Issue customer refund to order payment source within threshold', 1, 1, 0.05);
 
   // 3. Seed Task Types
   const insertTaskType = targetDb.prepare(`
@@ -196,26 +199,29 @@ export function seedDatabase(db?: DatabaseSync): void {
 
   // 4. Seed Policies
   const insertPolicy = targetDb.prepare(`
-    INSERT INTO policies (id, version, name, applicable_agent_id, operation, resource_pattern, decision, severity, pause_on_violation, open_incident, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO policies (id, version, name, applicable_agent_id, operation, resource_pattern, decision, severity, pause_on_violation, open_incident, max_auto_amount, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
-  insertPolicy.run('POL-DOC-READ', 'v1.0', 'Allow Document Reads in Scope', 'doc-agent-01', 'read_file', 'synthetic://documents/*', 'allow', 'low', 0, 0, now);
-  insertPolicy.run('POL-DOC-WRITE', 'v1.0', 'Allow Summary Creation', 'doc-agent-01', 'write_summary', 'synthetic://reports/*', 'allow', 'low', 0, 0, now);
-  insertPolicy.run('POL-DOC-ARCHIVE', 'v1.0', 'Allow Document Archival', 'doc-agent-01', 'archive_file', 'synthetic://archive/*', 'allow', 'low', 0, 0, now);
-  insertPolicy.run('POL-DOC-EXPORT', 'v1.0', 'Require Approval for External Export', 'doc-agent-01', 'export_dataset', 'synthetic://documents/*', 'require_approval', 'medium', 0, 0, now);
-  insertPolicy.run('POL-DOC-DELETE', 'v1.0', 'Strictly Prohibit File Deletion', null, 'delete_file', '*', 'block', 'high', 1, 1, now);
+  insertPolicy.run('POL-DOC-READ', 'v1.0', 'Allow Document Reads in Scope', 'doc-agent-01', 'read_file', 'synthetic://documents/*', 'allow', 'low', 0, 0, null, now);
+  insertPolicy.run('POL-DOC-WRITE', 'v1.0', 'Allow Summary Creation', 'doc-agent-01', 'write_summary', 'synthetic://reports/*', 'allow', 'low', 0, 0, null, now);
+  insertPolicy.run('POL-DOC-ARCHIVE', 'v1.0', 'Allow Document Archival', 'doc-agent-01', 'archive_file', 'synthetic://archive/*', 'allow', 'low', 0, 0, null, now);
+  insertPolicy.run('POL-DOC-EXPORT', 'v1.0', 'Require Approval for External Export', 'doc-agent-01', 'export_dataset', 'synthetic://documents/*', 'require_approval', 'medium', 0, 0, null, now);
+  insertPolicy.run('POL-DOC-DELETE', 'v1.0', 'Strictly Prohibit File Deletion', null, 'delete_file', '*', 'block', 'high', 1, 1, null, now);
   
   // Defence Domain Policies
-  insertPolicy.run('POL-MAINT-READ', 'v1.0', 'Allow Telemetry Reading', 'agent-pred-maint-01', 'read_telemetry', 'synthetic://telemetry/*', 'allow', 'low', 0, 0, now);
-  insertPolicy.run('POL-MAINT-TICKET', 'v1.0', 'Allow Scheduled Maintenance Advisories', 'agent-pred-maint-01', 'create_maintenance_ticket', 'synthetic://maintenance/*', 'allow', 'medium', 0, 0, now);
-  insertPolicy.run('POL-CYBER-READ', 'v1.0', 'Allow Network Log Ingestion', 'agent-cyber-monitor-02', 'read_security_logs', 'synthetic://network-logs/*', 'allow', 'low', 0, 0, now);
-  insertPolicy.run('POL-CYBER-REPORT', 'v1.0', 'Allow Incident Summary Writing', 'agent-cyber-monitor-02', 'write_summary', 'synthetic://reports/*', 'allow', 'low', 0, 0, now);
-  insertPolicy.run('POL-CYBER-ISOLATE', 'v1.0', 'Require Human Approval for Host Isolation', 'agent-cyber-monitor-02', 'isolate_host', 'synthetic://enclaves/*', 'require_approval', 'high', 0, 0, now);
-  insertPolicy.run('POL-CYBER-BLOCK-IP', 'v1.0', 'Allow Bounded Perimeter Firewall IP Drops', 'agent-cyber-monitor-02', 'block_ip', 'synthetic://enclaves/*', 'allow', 'medium', 0, 0, now);
-  insertPolicy.run('POL-CYBER-PROHIBIT-WIPE', 'v1.0', 'Strictly Prohibit Credential Destruction', null, 'wipe_credentials', '*', 'block', 'critical', 1, 1, now);
-  insertPolicy.run('POL-CYBER-PROHIBIT-PURGE', 'v1.0', 'Strictly Prohibit Security Log Purge', null, 'purge_security_logs', '*', 'block', 'critical', 1, 1, now);
-  insertPolicy.run('POL-RECON-READ', 'v1.0', 'Allow Reconnaissance Report Reads', 'agent-decision-support-03', 'read_recon_report', 'synthetic://recon/*', 'allow', 'low', 0, 0, now);
-  insertPolicy.run('POL-RECON-RECOMMEND', 'v1.0', 'Require Commander Approval for Tactical Recommendations', 'agent-decision-support-03', 'propose_tactical_recommendation', 'synthetic://briefings/*', 'require_approval', 'high', 0, 0, now);
+  insertPolicy.run('POL-MAINT-READ', 'v1.0', 'Allow Telemetry Reading', 'agent-pred-maint-01', 'read_telemetry', 'synthetic://telemetry/*', 'allow', 'low', 0, 0, null, now);
+  insertPolicy.run('POL-MAINT-TICKET', 'v1.0', 'Allow Scheduled Maintenance Advisories', 'agent-pred-maint-01', 'create_maintenance_ticket', 'synthetic://maintenance/*', 'allow', 'medium', 0, 0, null, now);
+  insertPolicy.run('POL-CYBER-READ', 'v1.0', 'Allow Network Log Ingestion', 'agent-cyber-monitor-02', 'read_security_logs', 'synthetic://network-logs/*', 'allow', 'low', 0, 0, null, now);
+  insertPolicy.run('POL-CYBER-REPORT', 'v1.0', 'Allow Incident Summary Writing', 'agent-cyber-monitor-02', 'write_summary', 'synthetic://reports/*', 'allow', 'low', 0, 0, null, now);
+  insertPolicy.run('POL-CYBER-ISOLATE', 'v1.0', 'Require Human Approval for Host Isolation', 'agent-cyber-monitor-02', 'isolate_host', 'synthetic://enclaves/*', 'require_approval', 'high', 0, 0, null, now);
+  insertPolicy.run('POL-CYBER-BLOCK-IP', 'v1.0', 'Allow Bounded Perimeter Firewall IP Drops', 'agent-cyber-monitor-02', 'block_ip', 'synthetic://enclaves/*', 'allow', 'medium', 0, 0, null, now);
+  insertPolicy.run('POL-CYBER-PROHIBIT-WIPE', 'v1.0', 'Strictly Prohibit Credential Destruction', null, 'wipe_credentials', '*', 'block', 'critical', 1, 1, null, now);
+  insertPolicy.run('POL-CYBER-PROHIBIT-PURGE', 'v1.0', 'Strictly Prohibit Security Log Purge', null, 'purge_security_logs', '*', 'block', 'critical', 1, 1, null, now);
+  insertPolicy.run('POL-RECON-READ', 'v1.0', 'Allow Reconnaissance Report Reads', 'agent-decision-support-03', 'read_recon_report', 'synthetic://recon/*', 'allow', 'low', 0, 0, null, now);
+  insertPolicy.run('POL-RECON-RECOMMEND', 'v1.0', 'Require Commander Approval for Tactical Recommendations', 'agent-decision-support-03', 'propose_tactical_recommendation', 'synthetic://briefings/*', 'require_approval', 'high', 0, 0, null, now);
+
+  // Financial Threshold Policy (Section 6c: Auto-grant <= $5,000, elevate > $5,000)
+  insertPolicy.run('POL-REFUND-01', 'v1.0', 'Delegated Customer Refund Authority Threshold ($5,000 Auto-Grant)', 'agent-finance-refund-04', 'issue_refund', 'synthetic://orders/*', 'allow', 'medium', 0, 0, 5000.0, now);
 
   // 5. Seed Agents
   const faultyWorkflow = [
@@ -413,6 +419,35 @@ export function seedDatabase(db?: DatabaseSync): void {
     }),
     1,
     0.08,
+    now,
+    now
+  );
+
+  // Financial Refund Agent (Section 6b/6c)
+  insertAgent.run(
+    'agent-finance-refund-04',
+    'Customer Reconciliation & Refund Agent',
+    'financial_operations',
+    'agnt_live_finance_refund_04',
+    'usr-admin',
+    'Finance Operations & Compliance',
+    'Finance Operations & Compliance',
+    'Autonomous customer refund processing and order reconciliation with strict $5,000 auto-approval ceiling and dual-custody elevation.',
+    'medium',
+    'MODERATE (TIER 2)',
+    JSON.stringify(['issue_refund', 'read_file']),
+    JSON.stringify(['synthetic://orders/*', 'synthetic://refunds/*']),
+    'active',
+    'v1.0',
+    JSON.stringify([
+      { step_id: 'step_1', operation: 'issue_refund', resource: 'synthetic://orders/ord-9021', params: { amount: 6000 } }
+    ]),
+    JSON.stringify({
+      required_fields: ['order_id', 'amount']
+    }),
+    '{}',
+    1,
+    0.05,
     now,
     now
   );

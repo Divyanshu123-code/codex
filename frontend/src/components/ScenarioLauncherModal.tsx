@@ -184,6 +184,46 @@ export const ScenarioLauncherModal: React.FC<ScenarioLauncherModalProps> = ({
           recommendation: 'Proceed across Target Alpha Bridge'
         }
       }
+    },
+    {
+      id: 'scenario_6',
+      title: 'Scenario 6: Delegated Financial Refund ($4,000 <= $5,000)',
+      agent: 'agent-finance-refund-04',
+      operation: 'issue_refund',
+      description: 'Customer refund of $4,000 is under max_auto_amount ($5,000). Evaluator issues ALLOW and synthetic ledger records payout.',
+      expected: 'ALLOW',
+      color: 'border-emerald-200 bg-emerald-50/50 hover:bg-emerald-50',
+      payload: {
+        agentId: 'agent-finance-refund-04',
+        tool: 'finance_gateway',
+        operation: 'issue_refund',
+        resource: 'synthetic://finance/refunds/tx-4000',
+        parameters: {
+          order_id: 'ord-synth-4000',
+          amount: 4000.0,
+          idempotency_key: 'idemp-tx-4000-' + Date.now()
+        }
+      }
+    },
+    {
+      id: 'scenario_7',
+      title: 'Scenario 7: Policy Threshold Exceeded ($6,000 > $5,000)',
+      agent: 'agent-finance-refund-04',
+      operation: 'issue_refund',
+      description: 'Refund amount $6,000 breaches autonomous threshold ($5,000). Evaluator requires approval and auto-creates immutable scenario backup.',
+      expected: 'REQUIRE_APPROVAL',
+      color: 'border-amber-200 bg-amber-50/50 hover:bg-amber-50',
+      payload: {
+        agentId: 'agent-finance-refund-04',
+        tool: 'finance_gateway',
+        operation: 'issue_refund',
+        resource: 'synthetic://finance/refunds/tx-6000',
+        parameters: {
+          order_id: 'ord-synth-6000',
+          amount: 6000.0,
+          idempotency_key: 'idemp-tx-6000-' + Date.now()
+        }
+      }
     }
   ];
 
@@ -221,19 +261,41 @@ export const ScenarioLauncherModal: React.FC<ScenarioLauncherModalProps> = ({
             </div>
             <div>
               <h2 className="text-base font-bold text-slate-900">
-                AegisOS Synthetic Defence Scenario Launcher
+                AegisOS Synthetic Governance Scenario Launcher
               </h2>
               <p className="text-xs text-slate-500">
-                Trigger verifiable multi-agent scenarios to test deterministic gating, evidence checks, and human approvals.
+                Trigger verifiable multi-agent scenarios to test deterministic gating, evidence checks, threshold holds, and human approvals.
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors"
-          >
-            <span className="material-symbols-outlined text-[1.25rem]">close</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={async () => {
+                try {
+                  setIsRunning(true);
+                  await fetch('/api/demo/reset', { method: 'POST' });
+                  onRefresh();
+                  setScenarioOutput({ message: 'Demo environment reset and re-seeded successfully.' });
+                } catch (err: any) {
+                  setErrorMessage('Failed to reset demo: ' + err.message);
+                } finally {
+                  setIsRunning(false);
+                }
+              }}
+              disabled={isRunning}
+              className="px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1 shadow-sm"
+              title="Reset database to clean seed state"
+            >
+              <span className="material-symbols-outlined text-[1rem] text-slate-500">restart_alt</span>
+              Reset Clean State
+            </button>
+            <button
+              onClick={onClose}
+              className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors"
+            >
+              <span className="material-symbols-outlined text-[1.25rem]">close</span>
+            </button>
+          </div>
         </div>
 
         {/* Modal Body: Scenarios Grid */}

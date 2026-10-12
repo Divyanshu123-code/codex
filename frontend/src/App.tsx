@@ -10,6 +10,7 @@ import { IncidentsView } from './components/IncidentsView';
 import { CorrectionsView } from './components/CorrectionsView';
 import { TasksView } from './components/TasksView';
 import { AuditLogView } from './components/AuditLogView';
+import { BackupsView } from './components/BackupsView';
 import { ScenarioLauncherModal } from './components/ScenarioLauncherModal';
 
 export function App() {
@@ -235,6 +236,12 @@ export function App() {
           {activeTab === 'audit' && (
             <AuditLogView
               auditEvents={auditEvents}
+            />
+          )}
+
+          {activeTab === 'backups' && (
+            <BackupsView
+              onRefresh={refreshData}
             />
           )}
         </main>

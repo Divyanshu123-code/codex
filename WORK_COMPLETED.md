@@ -3,7 +3,7 @@
 
 **Repository:** `https://github.com/Divyanshu123-code/codex.git`  
 **Date:** October 12, 2026  
-**Status:** AegisOS Defence-Specific Adaptation Complete & Verified (57 Tests / 11 Suites Passing)  
+**Status:** AegisOS Defence-Specific Adaptation Complete & Verified (67 Tests / 12 Suites Passing)  
 **Gates Satisfied:** G1 (Boundary Invariant), G2 (Approval Invariant), G3 (Recovery Invariant), G4 (Rehearsal Complete)  
 **Environment Boundary:** Demo Environment — Synthetic, Non-Operational Data Only (No connection to classified defence networks)
 
@@ -476,9 +476,9 @@ Accessible directly from the header's **"Run Scenarios"** button, enabling 1-cli
 
 | Verification Check | Execution Command | Result | Technical Details |
 |---|---|:---:|---|
-| **Test Suite** | `npm test` | **PASS (57/57)** | 11 test files passing in ~3.0s |
+| **Test Suite** | `npm test` | **PASS (67/67)** | 12 test files passing in ~3.3s |
 | **Backend Compilation** | `npm --prefix backend run build` | **PASS** | Clean compilation via `tsc` (zero TypeScript errors) |
-| **Frontend Production Build** | `npm --prefix frontend run build` | **PASS** | Clean build via `tsc -b && vite build` (365 kB bundle, zero errors) |
+| **Frontend Production Build** | `npm --prefix frontend run build` | **PASS** | Clean build via `tsc -b && vite build` (391 kB bundle, zero errors) |
 | **Database Migration & Reset** | `npm run seed` | **PASS** | SQLite tables cleanly dropped and seeded with defence agents & policies |
 | **End-to-End Browser Rehearsal** | Automated browser subagent | **PASS** | Captured walkthrough video recording and screenshots |
 | **Git Synchronization** | `git push` | **PUSHED** | Synced to `origin/main` repository |
@@ -499,11 +499,38 @@ The documentation clearly formalizes the four foundational challenges of autonom
 ### 12.2 Architectural Solutions & Flowcharts
 The updated `README.md` incorporates three detailed Mermaid flowcharts and architectural explanations:
 - **Flowchart 1 — Action Proposal & Deterministic Enforcement Pipeline:** Traces agent proposals through input quality preconditions (sensor ranges, freshness windows, evidence conflict detection), deterministic policy evaluations (`ALLOW`, `REQUIRE_APPROVAL`, `BLOCK`), HMAC-SHA256 signed execution tokens, and automated containment pausing.
-- **Flowchart 2 — Human-in-the-Loop Dual-Custody Approval:** Documents the 6-domain evidence review, atomic Compare-And-Swap (CAS) state changes, mandatory written rationale, and pre-execution state revalidation.
+- **Flowchart 2 — Human-in-the-Loop Dual-Custody Approval:** Documents the 6-domain evidence review, atomic Compare-And-Swap (CAS) state changes, mandatory written rationale, pre-execution state revalidation, and decision overturn via backup re-review.
 - **Flowchart 3 — Closed Diagnostics, Sandbox Regression & Central Recovery Gate (R1–R9):** Illustrates closed signature triage, the Diff Guard anti-widening gate, structural (S1–S6) and behavioural (B1–B6) sandbox checks, and the centralized 9-point resumption gate.
 
-### 12.3 Verification Baseline
-- 57 / 57 Vitest tests passing across 11 test suites.
-- Clean backend and frontend production builds.
-- Complete alignment between code implementation, database schema, and operational documentation.
+---
+
+## 13. Backup & Reinstatement Engine (Wrong Human Decision Recovery) & LLM Advisory Layer (Specs 6b, 6c, 6e)
+
+### 13.1 Administrative Error Recovery (Spec 6b & 6c)
+In operational control planes, human administrators can mistakenly reject legitimate actions during high-tempo incident triage or wrongly terminate agents. AegisOS implements an immutable backup and recovery architecture:
+1. **Automated Scenario Backups:** Every policy-threat event (`REQUIRE_APPROVAL` or `BLOCK`) automatically creates an immutable record in `scenario_backups` with a cryptographically bound SHA-256 snapshot hash.
+2. **Reopening Wrong Human Rejections (`POST /api/backups/:id/reopen`):**
+   - **Separation of Duties:** Reopening administrator must be a different human than the original rejector.
+   - **24-Hour Administrative Window:** Enforces timely reconsideration.
+   - **Idempotency CAS:** Exactly one reopening permitted per scenario backup.
+   - **Policy Prohibition Invariant:** Explicit prohibitions (`BLOCK` by policy rule) can *never* be reopened or overridden.
+   - **Pre-execution Revalidation:** The request is re-evaluated against the current policy state before entering the review queue.
+3. **Soft-Termination & Reinstatement (`POST /api/agents/:id/terminate`, `POST /api/agents/:id/reinstate`):**
+   - Agents are never hard-deleted; termination creates an immutable snapshot in `backups`.
+   - Reinstatement enforces Separation of Duties (different admin) and verifies policy hash integrity (`sha256(policies)`).
+   - Reinstated agents return strictly to `restricted` status; full activation requires the central resume gate (R1–R9).
+4. **Delegated Financial Threshold Rule:** Added `max_auto_amount` policy configuration (e.g. `$5,000.00` autonomous limit on `issue_refund`), routing transactions $\le \$5,000$ to `ALLOW` and transactions $> \$5,000$ to `REQUIRE_APPROVAL` with automatic scenario snapshot capture.
+5. **Audit Event Overturns:** Appends `DECISION_OVERTURNED` events into the append-only SHA-256 audit log, linking previous rejection, reopening actor, and new decision.
+
+### 13.2 LLM Client Advisory Layer (Spec 6e)
+- **Zero LLM in Enforcement Path:** Preserved Invariant G4. The evaluator, gateway, sandbox, and resume gate remain 100% deterministic TypeScript.
+- **Resilient Advisory Client (`backend/src/engine/llmClient.ts`):** Supports Anthropic API (`claude-sonnet-5-5` for patches, `claude-haiku-5-5` for summaries) with 10s timeout, exponential retry, Zod schema validation, and 100% deterministic fallback text for fully offline operation.
+- **L1 Debug Agent Patch Proposer:** Synthesizes structured patch diffs from diagnostics signatures (`POST /api/corrections/propose-patch`), validated by Diff Guard and Sandbox before application.
+- **L2 Plain-Language Request Review:** Explains threshold excesses and telemetry anomalies to operators (`POST /api/actions/explain/:id`), integrated directly into the operator console.
+- **Audit Logging of Advisory Interactions:** Hashes prompts and responses into the immutable audit trail.
+
+### 13.3 Test Verification Baseline
+- **Total Passing Tests:** **67 passing tests** across **12 test suites** (10 new tests in `backupsAndReopen.test.ts` verifying all 10 administrative error and recovery claims).
+- **Frontend Views:** Expanded operator console to 9 views (Overview, Agents, Policies, Approvals, Incidents, Corrections, Tasks, Audit Log, and Backups & Recovery).
+
 

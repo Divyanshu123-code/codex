@@ -38,6 +38,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const executionNav = [
     { id: 'tasks' as Tab, label: 'Tasks', icon: 'account_tree' },
     { id: 'audit' as Tab, label: 'Audit Log', icon: 'history' },
+    { id: 'backups' as Tab, label: 'Backups & Recovery', icon: 'settings_backup_restore' },
   ];
 
   return (

@@ -129,7 +129,7 @@ export function initializeSchema(db: DatabaseSync): void {
     -- Human Approvals table (FR-9 & Section 3.2)
     CREATE TABLE IF NOT EXISTS approvals (
       id TEXT PRIMARY KEY,
-      request_id TEXT UNIQUE NOT NULL,
+      request_id TEXT NOT NULL,
       approver_id TEXT,
       approver_role TEXT,
       status TEXT NOT NULL CHECK(status IN ('PENDING', 'APPROVED', 'REJECTED', 'EXPIRED')),
@@ -221,6 +221,45 @@ export function initializeSchema(db: DatabaseSync): void {
       timestamp INTEGER NOT NULL
     );
 
+    -- Scenario Backups table (Policy-threat snapshots & admin error recovery, Section 6b/6c)
+    CREATE TABLE IF NOT EXISTS scenario_backups (
+      id TEXT PRIMARY KEY,
+      correlation_id TEXT NOT NULL,
+      request_id TEXT NOT NULL,
+      agent_id TEXT NOT NULL,
+      agent_category TEXT,
+      policy_id TEXT,
+      policy_version TEXT,
+      policy_hash TEXT,
+      operation TEXT NOT NULL,
+      amount REAL,
+      parameters_snapshot TEXT NOT NULL,  -- JSON
+      evidence_checks TEXT,               -- JSON
+      decision TEXT NOT NULL,
+      reason_code TEXT NOT NULL,
+      approval_id TEXT,
+      human_decision TEXT,                -- JSON once decided (actor, role, reason, decided_at)
+      execution_status TEXT NOT NULL DEFAULT 'NOT_EXECUTED',
+      snapshot_hash TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      restored_at INTEGER,
+      reopens_approval_id TEXT,
+      correction_status TEXT NOT NULL DEFAULT 'NONE' CHECK(correction_status IN ('NONE', 'REOPENED', 'CORRECTED'))
+    );
+
+    -- Agent Snapshots table (State-change snapshots before terminate/pause, Section 6b)
+    CREATE TABLE IF NOT EXISTS backups (
+      id TEXT PRIMARY KEY,
+      agent_id TEXT NOT NULL,
+      trigger_event TEXT NOT NULL,
+      actor TEXT NOT NULL,                -- JSON { id, role }
+      reason TEXT NOT NULL,
+      snapshot_json TEXT NOT NULL,        -- JSON full agent config & policies
+      snapshot_hash TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      restored_at INTEGER
+    );
+
     -- Indexes for performance & quick timeline querying
     CREATE INDEX IF NOT EXISTS idx_audit_agent ON audit_events(agent_id);
     CREATE INDEX IF NOT EXISTS idx_audit_request ON audit_events(request_id);
@@ -229,6 +268,9 @@ export function initializeSchema(db: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS idx_incidents_agent ON incidents(agent_id);
     CREATE INDEX IF NOT EXISTS idx_approvals_status ON approvals(status);
     CREATE INDEX IF NOT EXISTS idx_tasks_handler ON tasks(handler);
+    CREATE INDEX IF NOT EXISTS idx_scenario_backups_agent ON scenario_backups(agent_id);
+    CREATE INDEX IF NOT EXISTS idx_scenario_backups_req ON scenario_backups(request_id);
+    CREATE INDEX IF NOT EXISTS idx_backups_agent ON backups(agent_id);
   `);
 
   // Safe incremental migration for existing databases on disk
@@ -247,7 +289,9 @@ export function initializeSchema(db: DatabaseSync): void {
     `ALTER TABLE action_requests ADD COLUMN agent_category TEXT`,
     `ALTER TABLE action_requests ADD COLUMN evidence_checks TEXT`,
     `ALTER TABLE incidents ADD COLUMN agent_category TEXT`,
-    `ALTER TABLE incidents ADD COLUMN evidence_checks TEXT`
+    `ALTER TABLE incidents ADD COLUMN evidence_checks TEXT`,
+    `ALTER TABLE policies ADD COLUMN max_auto_amount REAL`,
+    `ALTER TABLE approvals ADD COLUMN reopened_from_id TEXT`
   ];
 
   for (const sql of migrations) {

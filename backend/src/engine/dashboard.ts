@@ -50,6 +50,9 @@ export interface LeadershipDashboardData {
     escalatedTasksCount: number;
     pauseEventsCount: number;
     recoveryAttemptsCount: number;
+    humanDecisionsOverturned: number;
+    reopenRequests: number;
+    reinstatements: number;
   };
   costAndValueEstimates: {
     disclaimer: 'SIMULATED ESTIMATE --- NOT VERIFIED SAVINGS';
@@ -158,6 +161,27 @@ export function getLeadershipDashboard(
     WHERE event_type IN ('CORRECTION_TESTED', 'RESUME_ATTEMPTED') AND timestamp BETWEEN ? AND ?
   `).get(fromTime, toTime) as any;
 
+  const overturnedRow = targetDb.prepare(`
+    SELECT COUNT(*) as count FROM audit_events 
+    WHERE event_type = 'DECISION_OVERTURNED' AND timestamp BETWEEN ? AND ?
+  `).get(fromTime, toTime) as any;
+
+  let reopenCount = 0;
+  try {
+    const reopensRow = targetDb.prepare(`
+      SELECT COUNT(*) as count FROM scenario_backups 
+      WHERE correction_status IN ('REOPENED', 'CORRECTED') AND created_at BETWEEN ? AND ?
+    `).get(fromTime, toTime) as any;
+    reopenCount = reopensRow?.count || 0;
+  } catch {
+    // If scenario_backups table is not initialized yet
+  }
+
+  const reinstatementsRow = targetDb.prepare(`
+    SELECT COUNT(*) as count FROM audit_events 
+    WHERE event_type = 'AGENT_REINSTATED' AND timestamp BETWEEN ? AND ?
+  `).get(fromTime, toTime) as any;
+
   // 4. Simulated Cost & Labor Value Calculations
   // Estimated operating cost: sum(execution * simulated_cost)
   const opCostRow = targetDb.prepare(`
@@ -245,7 +269,10 @@ export function getLeadershipDashboard(
       },
       escalatedTasksCount: taskCounts.escalated || 0,
       pauseEventsCount: pauseEventsRow?.count || 0,
-      recoveryAttemptsCount: recoveryAttemptsRow?.count || 0
+      recoveryAttemptsCount: recoveryAttemptsRow?.count || 0,
+      humanDecisionsOverturned: overturnedRow?.count || 0,
+      reopenRequests: reopenCount,
+      reinstatements: reinstatementsRow?.count || 0
     },
     costAndValueEstimates: {
       disclaimer: 'SIMULATED ESTIMATE --- NOT VERIFIED SAVINGS',

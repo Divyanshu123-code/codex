@@ -6,7 +6,53 @@ export type Tab =
   | 'incidents' 
   | 'corrections' 
   | 'tasks' 
-  | 'audit';
+  | 'audit'
+  | 'backups';
+
+export interface ScenarioBackup {
+  id: string;
+  correlation_id: string;
+  request_id: string;
+  agent_id: string;
+  agent_category?: string;
+  policy_id: string;
+  policy_version?: string;
+  policy_hash?: string;
+  operation: string;
+  parameters_snapshot: Record<string, any>;
+  evidence_checks?: Record<string, any> | null;
+  decision: 'ALLOW' | 'REQUIRE_APPROVAL' | 'BLOCK';
+  reason_code: string;
+  approval_id?: string | null;
+  human_decision?: {
+    approverId?: string;
+    decision?: string;
+    reason?: string;
+    decidedAt?: number;
+  } | null;
+  execution_status?: string | null;
+  snapshot_hash: string;
+  correction_status: 'NONE' | 'REOPENED' | 'CORRECTED';
+  reopens_approval_id?: string | null;
+  created_at: number;
+  restored_at?: number | null;
+}
+
+export interface AgentBackup {
+  id: string;
+  agent_id: string;
+  trigger_event: string;
+  actor: {
+    id: string;
+    role: string;
+  };
+  reason: string;
+  snapshot_json: Record<string, any>;
+  snapshot_hash: string;
+  created_at: number;
+  restored_at?: number | null;
+}
+
 
 export interface Agent {
   id: string;

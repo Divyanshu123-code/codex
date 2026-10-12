@@ -11,6 +11,8 @@ import { auditRouter } from './routes/audit.js';
 import { correctionsRouter } from './routes/corrections.js';
 import { tasksRouter } from './routes/tasks.js';
 import { dashboardRouter } from './routes/dashboard.js';
+import { backupsRouter } from './routes/backups.js';
+import { demoRouter } from './routes/demo.js';
 
 export function createApp(): Express {
   const app = express();
@@ -33,6 +35,8 @@ export function createApp(): Express {
     tasksRouter(req, res, next);
   });
   app.use('/api/dashboard', dashboardRouter);
+  app.use('/api/backups', backupsRouter);
+  app.use('/api/demo', demoRouter);
 
   // Health check endpoint (Phase 1 deliverable)
   app.get('/api/health', (req: Request, res: Response) => {
