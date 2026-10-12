@@ -483,3 +483,27 @@ Accessible directly from the header's **"Run Scenarios"** button, enabling 1-cli
 | **End-to-End Browser Rehearsal** | Automated browser subagent | **PASS** | Captured walkthrough video recording and screenshots |
 | **Git Synchronization** | `git push` | **PUSHED** | Synced to `origin/main` repository |
 
+---
+
+## 12. Project Documentation & Problem Statement (PS5) Overhaul (`README.md`)
+
+The top-level `README.md` has been thoroughly revamped to provide an authoritative, judge-ready technical breakdown of **Problem Statement 5 (PS5)** and the exact engineering architecture implemented in **AegisOS**.
+
+### 12.1 Problem Statement (PS5) Breakdown
+The documentation clearly formalizes the four foundational challenges of autonomous AI agent governance:
+1. **The "Monitoring is Too Late" Fallacy:** Reactive telemetry analysis is insufficient; high-consequence operations must be intercepted and evaluated *before* side effects can reach execution layers.
+2. **LLM Non-Determinism:** LLMs cannot be trusted as gatekeepers due to prompt injections, hallucinations, probabilistic variance, and jailbreaks.
+3. **Privilege Widening during Automated Self-Healing ("Silent Degradation"):** Self-healing debuggers frequently expand permissions, disable failing unit checks, or weaken policy thresholds to artificially make workflows pass.
+4. **Absence of Dual-Custody & Cryptographic Non-Repudiation:** Complex actions lack mandatory multi-party operational sign-offs, atomic state synchronization, and tamper-evident audit trails.
+
+### 12.2 Architectural Solutions & Flowcharts
+The updated `README.md` incorporates three detailed Mermaid flowcharts and architectural explanations:
+- **Flowchart 1 — Action Proposal & Deterministic Enforcement Pipeline:** Traces agent proposals through input quality preconditions (sensor ranges, freshness windows, evidence conflict detection), deterministic policy evaluations (`ALLOW`, `REQUIRE_APPROVAL`, `BLOCK`), HMAC-SHA256 signed execution tokens, and automated containment pausing.
+- **Flowchart 2 — Human-in-the-Loop Dual-Custody Approval:** Documents the 6-domain evidence review, atomic Compare-And-Swap (CAS) state changes, mandatory written rationale, and pre-execution state revalidation.
+- **Flowchart 3 — Closed Diagnostics, Sandbox Regression & Central Recovery Gate (R1–R9):** Illustrates closed signature triage, the Diff Guard anti-widening gate, structural (S1–S6) and behavioural (B1–B6) sandbox checks, and the centralized 9-point resumption gate.
+
+### 12.3 Verification Baseline
+- 57 / 57 Vitest tests passing across 11 test suites.
+- Clean backend and frontend production builds.
+- Complete alignment between code implementation, database schema, and operational documentation.
+
