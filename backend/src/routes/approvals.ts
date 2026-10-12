@@ -79,7 +79,7 @@ function handleDecision(req: Request, res: Response) {
 
     res.json(result);
   } catch (err: any) {
-    if (err.message && (err.message.includes('UNAUTHORIZED_REVIEWER_ROLE') || err.message.includes('SEPARATION_OF_DUTIES_VIOLATION'))) {
+    if (err.message && (err.message.includes('UNAUTHORIZED_REVIEWER_ROLE') || err.message.includes('SEPARATION_OF_DUTIES_VIOLATION') || err.message.includes('TWO_PERSON_INTEGRITY_VIOLATION'))) {
       return res.status(403).json({ error: err.message });
     }
     if (err.message && err.message.includes('APPROVAL_ALREADY_DECIDED')) {

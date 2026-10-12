@@ -53,15 +53,30 @@ incidentsRouter.get('/:id/report', (req: Request, res: Response) => {
   }
 });
 
-// POST /api/incidents/:id/diagnose (Run bounded diagnostics)
-incidentsRouter.post('/:id/diagnose', (req: Request, res: Response) => {
+// Handler for running deterministic signature triage / diagnostics
+function handleIncidentDiagnostics(req: Request, res: Response) {
   try {
     const result = diagnoseIncident(req.params.id);
-    res.json(result);
+    const recommendedAction = typeof result.proposedCorrection === 'object' && result.proposedCorrection?.description
+      ? result.proposedCorrection.description
+      : (typeof result.proposedCorrection === 'string' ? result.proposedCorrection : 'Submit patch confining execution scope and verify in sandbox.');
+
+    res.json({
+      ...result,
+      signature_id: result.signatureId,
+      root_cause: result.explanation || result.causeCategory,
+      recommended_action: recommendedAction
+    });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }
-});
+}
+
+// POST /api/incidents/:id/diagnose (Run bounded diagnostics)
+incidentsRouter.post('/:id/diagnose', handleIncidentDiagnostics);
+
+// POST /api/incidents/:id/triage (Closed diagnostic signature triage)
+incidentsRouter.post('/:id/triage', handleIncidentDiagnostics);
 
 // Helper for exporting After-Action Reports
 function handleIncidentExport(req: Request, res: Response, forcedFormat?: 'markdown' | 'json') {

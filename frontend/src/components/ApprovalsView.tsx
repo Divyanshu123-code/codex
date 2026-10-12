@@ -63,6 +63,11 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
     }
   }, [selectedApprovalId, approvals]);
 
+  // Clear stale AI explanation when switching selected approval
+  useEffect(() => {
+    setAiExplanation(null);
+  }, [selectedApproval?.id, selectedApproval?.request_id]);
+
   const handleReopenDirect = async () => {
     if (!selectedApproval) return;
     setIsReopening(true);
@@ -99,7 +104,8 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
     if (!selectedApproval) return;
     setIsExplaining(true);
     try {
-      const res = await fetch(`/api/actions/explain/${selectedApproval.request_id}`, {
+      const targetId = selectedApproval.request_id || selectedApproval.id;
+      const res = await fetch(`/api/actions/explain/${targetId}`, {
         method: 'POST'
       });
       if (res.ok) {

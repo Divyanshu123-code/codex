@@ -161,7 +161,7 @@ authRouter.get('/demo-users', (req: Request, res: Response) => {
       id: u.id,
       username: u.username,
       role: u.role,
-      label: ROLE_MAP[u.role as keyof typeof ROLE_MAP]?.label || u.role,
+      label: u.id === 'usr-admin-2' ? 'Secondary Commander (2nd Authority)' : (ROLE_MAP[u.role as keyof typeof ROLE_MAP]?.label || u.role),
       authority_level: ROLE_MAP[u.role as keyof typeof ROLE_MAP]?.authority_level || 0,
       demoPassword: 'password123'
     }))

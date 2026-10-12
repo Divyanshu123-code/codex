@@ -23,6 +23,25 @@ correctionsRouter.get('/', (req: Request, res: Response) => {
   }
 });
 
+// GET /api/corrections/:id
+correctionsRouter.get('/:id', (req: Request, res: Response) => {
+  try {
+    const db = getDatabase();
+    const r = db.prepare('SELECT * FROM corrections WHERE id = ?').get(req.params.id) as any;
+    if (!r) {
+      return res.status(404).json({ error: 'Correction not found' });
+    }
+    res.json({
+      ...r,
+      patch: JSON.parse(r.patch),
+      structural_checks: r.structural_checks ? JSON.parse(r.structural_checks) : [],
+      behavioural_checks: r.behavioural_checks ? JSON.parse(r.behavioural_checks) : []
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 const submitCorrectionSchema = z.object({
   incidentId: z.string().min(1),
   patch: z.any(),

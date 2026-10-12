@@ -25,6 +25,7 @@ export const IncidentsView: React.FC<IncidentsViewProps> = ({
   const [isReportLoading, setIsReportLoading] = useState(false);
   const [triageData, setTriageData] = useState<any>(null);
   const [isTriageLoading, setIsTriageLoading] = useState(false);
+  const [triageError, setTriageError] = useState<string | null>(null);
 
   const filteredIncidents = incidents.filter(i => {
     if (statusFilter === 'all') return true;
@@ -50,16 +51,36 @@ export const IncidentsView: React.FC<IncidentsViewProps> = ({
 
   const handleRunTriage = async (incidentId: string) => {
     setIsTriageLoading(true);
+    setTriageError(null);
     try {
-      const res = await fetch(`/api/incidents/${incidentId}/triage`, {
+      let res = await fetch(`/api/incidents/${incidentId}/triage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: 'usr-admin' })
       });
+      if (!res.ok) {
+        // Fallback to /diagnose
+        res = await fetch(`/api/incidents/${incidentId}/diagnose`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: 'usr-admin' })
+        });
+      }
       const data = await parseJsonSafe(res);
+      if (!res.ok) {
+        throw new Error(data?.error || `Triage endpoint returned HTTP ${res.status}`);
+      }
       setTriageData(data);
-    } catch (err) {
-      console.error(err);
+      if (selectedIncident && selectedIncident.id === incidentId) {
+        setSelectedIncident({
+          ...selectedIncident,
+          status: 'DIAGNOSED',
+          signature_id: data.signature_id || data.signatureId || selectedIncident.signature_id
+        });
+      }
+    } catch (err: any) {
+      console.error('Signature Triage error:', err);
+      setTriageError(err.message || 'Signature triage failed');
     } finally {
       setIsTriageLoading(false);
     }

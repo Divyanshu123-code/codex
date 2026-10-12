@@ -40,6 +40,7 @@ export function seedDatabase(db?: DatabaseSync): void {
     VALUES (?, ?, ?, ?, ?)
   `);
   insertUser.run('usr-admin', 'admin', passwordHash, 'admin', now);
+  insertUser.run('usr-admin-2', 'admin2', passwordHash, 'admin', now);
   insertUser.run('usr-reviewer', 'reviewer', passwordHash, 'reviewer', now);
   insertUser.run('usr-auditor', 'auditor', passwordHash, 'auditor', now);
   insertUser.run('usr-researcher', 'researcher', passwordHash, 'auditor', now);

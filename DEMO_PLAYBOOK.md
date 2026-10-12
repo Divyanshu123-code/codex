@@ -12,11 +12,14 @@
 | Display Persona | Role ID | Authority Level | Capabilities | Demo Password |
 | :--- | :--- | :---: | :--- | :--- |
 | **Commander / System Authority** | `admin` | **Level 2** | Full clearance: Dual-key 2nd approval, policy corrections, overrides, reopen, demo resets | `password123` |
+| **Secondary Commander (2nd Authority)** | `admin2` | **Level 2** | Independent 2nd commander: Approves reopened requests previously rejected by admin 1, TPI co-signer | `password123` |
 | **Duty Officer** | `reviewer` | **Level 1** | Operational clearance: Approvals/rejections up to $15,000 threshold, first-signatory for TPI | `password123` |
 | **Inspector** | `auditor` | **Level 0** | Independent oversight: Read-only access across all enclaves, audit verification, exports | `password123` |
 
 > [!TIP]
-> **Presenter Quick-Switch**: When logged in, click the **"Switch Role"** pill in the top-right header to instantly swap personas without typing credentials.
+> **Presenter Quick-Switch**: When logged in, click the **"Switch Role"** pill in the top-right header (or select persona on Login screen) to instantly swap personas without typing credentials.
+>
+> **Reopened Request Governance**: If Commander 1 (`admin`) rejects an action request and it is later reopened, the system blocks `admin` from approving it (`SEPARATION_OF_DUTIES_VIOLATION`). Switch to **`admin2`** to provide the required independent secondary administrator clearance.
 
 ---
 

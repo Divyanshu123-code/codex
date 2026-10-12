@@ -8,7 +8,9 @@
     "dev:backend": "npm --prefix backend run dev",
     "dev:frontend": "npm --prefix frontend run dev",
     "seed": "npm --prefix backend run seed",
-    "test:backend": "npm --prefix backend run test"
+    "test:backend": "npm --prefix backend run test",
+    "autorun": "node scripts/autorun.mjs",
+    "autorun:demo": "node scripts/autorun.mjs --demo"
   },
   "engines": {
     "node": ">=22.5.0"

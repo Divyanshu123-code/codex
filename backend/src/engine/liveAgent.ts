@@ -630,7 +630,7 @@ export function runScriptedLiveAgent(
     }
   }
   // Preset (b): Requisition 6000 (HOLD for commander)
-  else if (lowerPrompt.includes('6000')) {
+  else if (lowerPrompt.includes('6000') || lowerPrompt.includes('6,000')) {
     const mapped = mapToolCallToAction(agentId, 'issue_refund', {
       order_id: 'req-6001',
       amount: 6000

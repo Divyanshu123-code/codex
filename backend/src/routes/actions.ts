@@ -11,7 +11,11 @@ const actionSchema = z.object({
   tool: z.string().min(1),
   operation: z.string().min(1),
   resource: z.string().min(1),
-  parameters: z.record(z.any()).optional().default({})
+  parameters: z.record(z.any()).optional().default({}),
+  actor: z.object({
+    type: z.enum(['human', 'agent']),
+    id: z.string()
+  }).optional()
 });
 
 // POST /api/actions/evaluate (Evaluation without execution)
@@ -96,10 +100,11 @@ actionsRouter.post('/route', (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid action payload', details: parsed.error.format() });
     }
 
-    const { agentId, tool, operation, resource, parameters } = parsed.data;
+    const { agentId, tool, operation, resource, parameters, actor } = parsed.data;
+    const effectiveActor = actor || { type: 'agent' as const, id: agentId };
     const result = routeAction(
       { agent_id: agentId, tool, operation, resource, parameters },
-      { type: 'agent', id: agentId }
+      effectiveActor
     );
 
     res.json(result);
@@ -112,7 +117,30 @@ actionsRouter.post('/route', (req: Request, res: Response) => {
 actionsRouter.post('/explain/:id', async (req: Request, res: Response) => {
   try {
     const db = getDatabase();
-    const reqRow = db.prepare('SELECT * FROM action_requests WHERE id = ?').get(req.params.id) as any;
+    let reqRow = db.prepare('SELECT * FROM action_requests WHERE id = ?').get(req.params.id) as any;
+    
+    // Fallback: If not found in action_requests directly, lookup via approvals table
+    if (!reqRow) {
+      const apprRow = db.prepare('SELECT * FROM approvals WHERE id = ? OR request_id = ?').get(req.params.id, req.params.id) as any;
+      if (apprRow) {
+        reqRow = db.prepare('SELECT * FROM action_requests WHERE id = ?').get(apprRow.request_id) as any;
+        if (!reqRow) {
+          reqRow = {
+            id: apprRow.request_id,
+            agent_id: apprRow.agent_id || 'unknown-agent',
+            operation: apprRow.operation || 'requested_operation',
+            resource: apprRow.resource || 'protected_resource',
+            parameters: apprRow.parameters || '{}',
+            gate_decision: apprRow.gate_decision || 'REQUIRE_APPROVAL',
+            gate_reason_code: apprRow.gate_reason_code || 'HELD_FOR_REVIEW',
+            explanation: apprRow.request_explanation || 'Human supervisory evaluation required.',
+            policy_id: apprRow.policy_id || 'POL-GOV-01',
+            evidence_checks: apprRow.evidence_checks || null
+          };
+        }
+      }
+    }
+
     if (!reqRow) {
       return res.status(404).json({ error: 'Action request not found' });
     }
