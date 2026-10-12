@@ -51,8 +51,8 @@ export function decideApproval(
     throw new Error(`Approval record ${approvalId} not found.`);
   }
 
-  // Separation of duties on reopened approvals (Section 6c)
-  if (approvalRow.reopened_from_id) {
+  // Separation of duties on reopened approvals (Section 6c): original rejector cannot approve
+  if (decision === 'APPROVED' && approvalRow.reopened_from_id) {
     const origAppr = targetDb.prepare('SELECT approver_id FROM approvals WHERE id = ?').get(approvalRow.reopened_from_id) as any;
     if (origAppr && origAppr.approver_id === approver.id) {
       throw new Error('SEPARATION_OF_DUTIES_VIOLATION: Cannot approve a reopened request that you previously rejected.');

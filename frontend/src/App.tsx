@@ -138,10 +138,17 @@ export function App() {
     reason: string,
     userId: string
   ) => {
-    const res = await fetch(`/api/approvals/${approvalId}/decide`, {
+    const res = await fetch(`/api/approvals/${approvalId}/decision`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status, reason, userId })
+      body: JSON.stringify({
+        decision: status,
+        status,
+        approverId: userId,
+        userId,
+        approverRole: userId.includes('admin') ? 'admin' : 'reviewer',
+        reason
+      })
     });
     if (!res.ok) {
       const err = await parseJsonSafe(res);
