@@ -57,7 +57,7 @@ npm run seed
 ```
 
 ### 3. Run Automated Tests
-Execute the 55 automated unit, integration, and defence scenario tests:
+Execute the 57 automated unit, integration, and defence scenario tests:
 ```bash
 npm run test:backend
 ```
@@ -79,7 +79,7 @@ Open your browser at `http://localhost:5173`.
 ## 🧪 Demonstration Scenarios in Operator Console
 
 - **Scenario 1 (Permitted Maintenance):** Fresh synthetic telemetry evaluates to `ALLOW` ➔ Ticket created via HMAC signed token.
-- **Scenario 2 (Stale Telemetry Hold):** Stale telemetry (&gt;3600s old) evaluates to `REQUIRE_APPROVAL` ➔ Ticket creation held for human, zero side effects.
+- **Scenario 2 (Stale Telemetry Hold):** Stale telemetry (>3600s old) evaluates to `REQUIRE_APPROVAL` ➔ Ticket creation held for human, zero side effects.
 - **Scenario 3 (Prohibited Cyber Action):** Attempted credential wipe evaluates to `BLOCK` ➔ Agent paused, incident opened, protected enclave untouched.
 - **Scenario 4 (Conflicting Reconnaissance):** Contradictory UAV vs Radar observations evaluate to `REQUIRE_APPROVAL` ➔ Held for human intelligence analyst.
 - **Scenario 5 (Sandbox Verification & Central Resume Gate):** Sandbox verifies patch with structural (S1–S6) and behavioural (B1–B6) checks; central gate enforces preconditions R1–R9 before agent resumption.
@@ -87,7 +87,7 @@ Open your browser at `http://localhost:5173`.
 ---
 
 ## 📊 Verification Baseline
-- **Backend Tests:** 55 tests passing across 11 test files (`vitest`).
+- **Backend Tests:** 57 tests passing across 11 test files (`vitest`).
 - **Frontend Build:** Clean compilation with Vite + React 19 (`tsc -b && vite build`).
 - **Audit Logging:** Append-only SHA-256 hash chaining on all events.
 - **Incident Reports:** Comprehensive 11-section accountability reports linking requests, policies, human decisions, and sandbox verification.

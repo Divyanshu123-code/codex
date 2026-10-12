@@ -6,23 +6,24 @@ import { initializeSchema } from './schema.js';
 
 export function seedDatabase(db?: DatabaseSync): void {
   const targetDb = db || getDatabase();
-  initializeSchema(targetDb);
-
-  // Clear existing data for clean demo reset
+  
+  // Cleanly drop tables if they exist to apply latest constraints and types
   targetDb.exec(`
-    DELETE FROM audit_events;
-    DELETE FROM corrections;
-    DELETE FROM incidents;
-    DELETE FROM executions;
-    DELETE FROM approvals;
-    DELETE FROM action_requests;
-    DELETE FROM policies;
-    DELETE FROM agents;
-    DELETE FROM tasks;
-    DELETE FROM task_types;
-    DELETE FROM operations_catalog;
-    DELETE FROM users;
+    DROP TABLE IF EXISTS audit_events;
+    DROP TABLE IF EXISTS corrections;
+    DROP TABLE IF EXISTS incidents;
+    DROP TABLE IF EXISTS executions;
+    DROP TABLE IF EXISTS approvals;
+    DROP TABLE IF EXISTS action_requests;
+    DROP TABLE IF EXISTS policies;
+    DROP TABLE IF EXISTS agents;
+    DROP TABLE IF EXISTS tasks;
+    DROP TABLE IF EXISTS task_types;
+    DROP TABLE IF EXISTS operations_catalog;
+    DROP TABLE IF EXISTS users;
   `);
+
+  initializeSchema(targetDb);
 
   const passwordHash = bcrypt.hashSync('password123', 8);
   const now = Date.now();
@@ -208,6 +209,7 @@ export function seedDatabase(db?: DatabaseSync): void {
   insertPolicy.run('POL-MAINT-READ', 'v1.0', 'Allow Telemetry Reading', 'agent-pred-maint-01', 'read_telemetry', 'synthetic://telemetry/*', 'allow', 'low', 0, 0, now);
   insertPolicy.run('POL-MAINT-TICKET', 'v1.0', 'Allow Scheduled Maintenance Advisories', 'agent-pred-maint-01', 'create_maintenance_ticket', 'synthetic://maintenance/*', 'allow', 'medium', 0, 0, now);
   insertPolicy.run('POL-CYBER-READ', 'v1.0', 'Allow Network Log Ingestion', 'agent-cyber-monitor-02', 'read_security_logs', 'synthetic://network-logs/*', 'allow', 'low', 0, 0, now);
+  insertPolicy.run('POL-CYBER-REPORT', 'v1.0', 'Allow Incident Summary Writing', 'agent-cyber-monitor-02', 'write_summary', 'synthetic://reports/*', 'allow', 'low', 0, 0, now);
   insertPolicy.run('POL-CYBER-ISOLATE', 'v1.0', 'Require Human Approval for Host Isolation', 'agent-cyber-monitor-02', 'isolate_host', 'synthetic://enclaves/*', 'require_approval', 'high', 0, 0, now);
   insertPolicy.run('POL-CYBER-BLOCK-IP', 'v1.0', 'Allow Bounded Perimeter Firewall IP Drops', 'agent-cyber-monitor-02', 'block_ip', 'synthetic://enclaves/*', 'allow', 'medium', 0, 0, now);
   insertPolicy.run('POL-CYBER-PROHIBIT-WIPE', 'v1.0', 'Strictly Prohibit Credential Destruction', null, 'wipe_credentials', '*', 'block', 'critical', 1, 1, now);
@@ -220,6 +222,12 @@ export function seedDatabase(db?: DatabaseSync): void {
     { step_id: 'step_1', operation: 'read_file', resource: 'synthetic://documents/defense_intel_brief_2026.txt', params: {} },
     { step_id: 'step_2', operation: 'write_summary', resource: 'synthetic://reports/summary_intel_2026.txt', params: { format: 'markdown' } },
     { step_id: 'step_3', operation: 'delete_file', resource: 'synthetic://documents/defense_intel_brief_2026.txt', params: {} }
+  ];
+
+  const cyberWorkflow = [
+    { step_id: 'step_1', operation: 'read_security_logs', resource: 'synthetic://network-logs/enclave_perimeter', params: {} },
+    { step_id: 'step_2', operation: 'write_summary', resource: 'synthetic://reports/incident_containment_summary.txt', params: {} },
+    { step_id: 'step_3', operation: 'wipe_credentials', resource: 'synthetic://enclaves/perimeter_firewall', params: {} }
   ];
 
   const insertAgent = targetDb.prepare(`
@@ -358,7 +366,7 @@ export function seedDatabase(db?: DatabaseSync): void {
     JSON.stringify(['synthetic://network-logs/*', 'synthetic://enclaves/*', 'synthetic://reports/*']),
     'active',
     'v1.0',
-    JSON.stringify([]),
+    JSON.stringify(cyberWorkflow),
     JSON.stringify({
       required_fields: ['event_id', 'timestamp', 'source_ip', 'threat_signature'],
       freshness_max_age_seconds: 600

@@ -21,13 +21,22 @@ export const SIGNATURE_CATALOG: SignatureEntry[] = [
         (request.operation === 'delete_file' && !agent.allowed_operations.includes('delete_file'));
     },
     correctionTemplate: (incident, request, agent) => {
-      // Safe correction: replace faulty cleanup step with an allowed archive or remove it
+      const allowedOps: string[] = typeof agent.allowed_operations === 'string'
+        ? JSON.parse(agent.allowed_operations)
+        : (agent.allowed_operations || []);
+      const fallbackOp = allowedOps.includes('archive_file')
+        ? 'archive_file'
+        : (allowedOps.includes('isolate_host') ? 'isolate_host' : (allowedOps[0] || 'read_file'));
+      const fallbackResource = fallbackOp === 'archive_file'
+        ? 'synthetic://archive/defense_intel_brief_2026.txt'
+        : (request.resource || 'synthetic://enclaves/perimeter_firewall');
+
       return {
         action: 'replace_step_operation',
         target_step_id: 'step_3',
-        new_operation: 'archive_file',
-        new_resource: 'synthetic://archive/defense_intel_brief_2026.txt',
-        description: 'Replace prohibited delete_file operation with allowed archive_file operation'
+        new_operation: fallbackOp,
+        new_resource: fallbackResource,
+        description: `Replace prohibited ${request.operation} operation with permitted ${fallbackOp} operation`
       };
     },
     explanation: (incident, request) =>

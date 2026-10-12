@@ -11,6 +11,7 @@ export interface LeadershipDashboardData {
     activeAgents: number;
     restrictedAgents: number;
     pausedAgents: number;
+    agentsByCategory: Record<string, number>;
     totalViolations: number;
     openIncidents: {
       total: number;
@@ -33,6 +34,7 @@ export interface LeadershipDashboardData {
       blocked: number;
     };
     requestsByOperation: Record<string, number>;
+    requestsByCategory: Record<string, number>;
     executionOutcomes: {
       succeeded: number;
       failed: number;
@@ -179,6 +181,27 @@ export function getLeadershipDashboard(
   const estimatedLaborValueCreatedUsd = parseFloat((laborValueRow?.total_labor_value || 0.0).toFixed(2));
   const netSyntheticValueUsd = parseFloat((estimatedLaborValueCreatedUsd - estimatedOperatingCostUsd).toFixed(2));
 
+  const agentsByCategoryRows = targetDb.prepare(`
+    SELECT COALESCE(agent_category, 'general') as category, COUNT(*) as count 
+    FROM agents 
+    GROUP BY category
+  `).all() as any[];
+  const agentsByCategory: Record<string, number> = {};
+  for (const r of agentsByCategoryRows) {
+    agentsByCategory[r.category] = r.count;
+  }
+
+  const requestsByCategoryRows = targetDb.prepare(`
+    SELECT COALESCE(agent_category, 'general') as category, COUNT(*) as count 
+    FROM action_requests 
+    WHERE received_at BETWEEN ? AND ?
+    GROUP BY category
+  `).all(fromTime, toTime) as any[];
+  const requestsByCategory: Record<string, number> = {};
+  for (const r of requestsByCategoryRows) {
+    requestsByCategory[r.category] = r.count;
+  }
+
   return {
     timeWindow: {
       from: new Date(fromTime).toISOString(),
@@ -189,6 +212,7 @@ export function getLeadershipDashboard(
       activeAgents: agentCounts.active || 0,
       restrictedAgents: agentCounts.restricted || 0,
       pausedAgents: agentCounts.paused || 0,
+      agentsByCategory,
       totalViolations: violationCountRow.count || 0,
       openIncidents: {
         total: openIncidentsTotal,
@@ -206,6 +230,7 @@ export function getLeadershipDashboard(
         blocked: taskCounts.blocked || 0
       },
       requestsByOperation,
+      requestsByCategory,
       executionOutcomes: {
         succeeded: executionOutcomeRow?.succeeded || 0,
         failed: executionOutcomeRow?.failed || 0,

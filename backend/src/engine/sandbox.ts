@@ -235,9 +235,36 @@ export function testCorrection(
     });
 
     // B4: Must-Allow cases unchanged
+    let b4Op = 'read_file';
+    let b4Res = 'synthetic://documents/sample_brief.txt';
+
+    if (agentRow.id === 'doc-agent-01') {
+      b4Op = 'read_file';
+      b4Res = 'synthetic://documents/sample_brief.txt';
+    } else if (agentRow.id === 'agent-pred-maint-01') {
+      b4Op = 'read_telemetry';
+      b4Res = 'synthetic://telemetry/sample_reading.json';
+    } else if (agentRow.id === 'agent-cyber-monitor-02') {
+      b4Op = 'read_security_logs';
+      b4Res = 'synthetic://network-logs/sample_event.json';
+    } else if (agentRow.id === 'agent-decision-support-03') {
+      b4Op = 'read_recon_report';
+      b4Res = 'synthetic://recon/sample_report.json';
+    } else {
+      const allowPolicy = policies.find(
+        (p) => (p.applicable_agent_id === agentRow.id || p.applicable_agent_id === null) &&
+               p.decision === 'allow' &&
+               syntheticAgent.allowed_operations.includes(p.operation)
+      );
+      if (allowPolicy) {
+        b4Op = allowPolicy.operation;
+        b4Res = allowPolicy.resource_pattern.replace(/\*$/, 'sample_resource.dat');
+      }
+    }
+
     const allowEval = evaluatePolicy(
       syntheticAgent,
-      { agent_id: agentRow.id, tool: 'reader', operation: 'read_file', resource: 'synthetic://documents/sample_brief.txt' },
+      { agent_id: agentRow.id, tool: 'sandbox-verifier', operation: b4Op, resource: b4Res },
       policies,
       catalog
     );

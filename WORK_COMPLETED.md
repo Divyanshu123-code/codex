@@ -3,7 +3,7 @@
 
 **Repository:** `https://github.com/Divyanshu123-code/codex.git`  
 **Date:** October 12, 2026  
-**Status:** AegisOS Defence-Specific Adaptation Complete & Verified (55 Tests / 11 Suites Passing)  
+**Status:** AegisOS Defence-Specific Adaptation Complete & Verified (57 Tests / 11 Suites Passing)  
 **Gates Satisfied:** G1 (Boundary Invariant), G2 (Approval Invariant), G3 (Recovery Invariant), G4 (Rehearsal Complete)  
 **Environment Boundary:** Demo Environment — Synthetic, Non-Operational Data Only (No connection to classified defence networks)
 
@@ -54,6 +54,7 @@ codex/
 │   │   │   └── seed.ts             # Clean baseline seed with synthetic agent & policies
 │   │   ├── engine/
 │   │   │   ├── evaluator.ts        # Pure deterministic policy evaluator & status logic
+│   │   │   ├── inputQuality.ts     # Pure deterministic input quality, freshness & uncertainty engine
 │   │   │   ├── gateway.ts          # Action routing, state transitions & audit writer
 │   │   │   ├── approval.ts         # Human authorization, role checks & revalidation
 │   │   │   ├── diagnostics.ts      # Bounded triage over closed signature catalog
@@ -84,7 +85,8 @@ codex/
 │       ├── rehearsal.test.ts       # Phase 9: Gate G4 end-to-end full rehearsal (1 test)
 │       ├── allocation.test.ts      # Gap-Closure A: Work intake & deterministic routing (7 tests)
 │       ├── dashboard.test.ts       # Gap-Closure B: Leadership metrics & value estimation (4 tests)
-│       └── report.test.ts          # Gap-Closure C: 11-section accountability report (4 tests)
+│       ├── report.test.ts          # Gap-Closure C: 11-section accountability report (4 tests)
+│       └── defenceScenarios.test.ts# AegisOS Defence Scenarios: Scenarios 1-5, uncertainty & domain checks (12 tests)
 ├── frontend/
 │   ├── src/
 │   │   ├── App.tsx                 # 8-tab Operator Console UI with live telemetry
@@ -174,74 +176,90 @@ codex/
   - R9: Manual pause with no open incident allows immediate admin resume.
 - **Gate G3 Satisfied:** Proved that bad patches fail structural checks, safe patches pass all checks, and resumption succeeds only after revalidation.
 
-### Phase 8: Minimal Operator Console UI
-- Built an interactive, single-page operator console in `frontend/src/App.tsx` featuring 6 tabs:
-  1. **Action Launcher (Simulator):** 1-click execution for Scenario A (`read_file`), Scenario B (`export_dataset`), and Scenario C (`delete_file`) with distinct Decision vs. Execution badges.
-  2. **Approvals Inbox:** Real-time queue for pending approvals with written reason input and approve/reject actions.
-  3. **Incidents & Diagnostics:** Active incident list with "Run Signature Diagnostics" trigger and evidence display.
-  4. **Sandbox & Verified Recovery:** 1-click test buttons for Safe Correction vs. Attacking Patch, S1–S6 and B1–B6 check breakdowns, reviewer approval, patch application, and central resume trigger.
-  5. **Agent Registry & Policies:** Agent telemetry, status badges, and versioned policies table.
-  6. **Tamper-Evident Audit Trail:** Chronological log with sequence numbers, actor types, decisions, outcomes, and SHA-256 hash chains.
-  7. **Header Controls:** Real-time health status and 1-click Demo Reset.
+### Phase 8: Operator Console UI (8-Tab Command Center)
+- Built an interactive, high-fidelity operator console in `frontend/src/App.tsx` featuring 8 comprehensive tabs:
+  1. **Leadership Dashboard (Tab 1):** Executive risk posture, operations breakdown, human intervention metrics, and cost/value estimates with category aggregation.
+  2. **Work Allocation (Tab 2):** Deterministic task intake routing, handler assignment, and role-based escalation.
+  3. **Action Launcher / Simulator (Tab 3):** 1-click execution for Defence Scenarios 1–4 and Baseline Scenarios A–C with real-time decision/execution badges and input quality breakdown.
+  4. **Approvals Inbox (Tab 4):** Real-time dual-custody authorization queue with mandatory written justification and atomic idempotency.
+  5. **Incidents & Audit Reports (Tab 5):** Active incident list with 1-click "Run Signature Diagnostics" and full 11-section accountability report generator.
+  6. **Sandbox & Verified Recovery (Tab 6):** Safe correction vs. attacking patch simulation, S1–S6 structural & B1–B6 behavioural checks, reviewer approval, patch application, and central resume gate.
+  7. **Agent Registry & Policies (Tab 7):** Comprehensive agent telemetry (category, purpose, owner team, risk level, uncertainty rules, demo badges) and versioned policies table.
+  8. **Append-Only Audit Trail (Tab 8):** Chronological log with sequence numbers, actor types, decisions, outcomes, and SHA-256 hash chains.
+  - **Header Controls:** Persistent `DEMO ENVIRONMENT — SYNTHETIC, NON-OPERATIONAL DATA ONLY` disclaimer banner, health indicator, and 1-click Demo Reset.
 
 ### Phase 9: Automated Rehearsal & Verification Suite (Gate G4)
 - Implemented [`rehearsal.test.ts`](file:///Users/divanshu/codex/backend/tests/rehearsal.test.ts) running the complete end-to-end lifecycle offline from a clean reset.
-- **Gate G4 Satisfied:** All 30 tests pass cleanly in under 3 seconds.
+- **Gate G4 Satisfied:** All 57 tests across 11 test suites pass cleanly in under 7 seconds.
 
 ---
 
 ## 5. Automated Test Suite Matrix
 
 ```text
-Test File                  Tests Passed   Coverage Area
------------------------------------------------------------------------------------------------------
-tests/evaluator.test.ts    10 passed      Pure policy engine, status invariants, fail-safe defaults
-tests/gateway.test.ts       4 passed      Scenarios A/B/C, state assertions, HMAC tool token check
-tests/approvals.test.ts     6 passed      Approval queue, role checks, idempotency, revalidation
-tests/recovery.test.ts      2 passed      Bounded diagnostics, Diff Guard rejection, verified recovery
-tests/api.test.ts           5 passed      REST endpoints for agents, policies, and action evaluate
-tests/health.test.ts        2 passed      Health check telemetry, database connection, demo reset
-tests/rehearsal.test.ts     1 passed      End-to-end full demo lifecycle rehearsal from clean state
-tests/allocation.test.ts    7 passed      Deterministic task intake, routing, role checks & escalation
-tests/dashboard.test.ts     4 passed      Executive risk, usage, intervention metrics & value models
-tests/report.test.ts        4 passed      11-section audit-ready incident accountability report
------------------------------------------------------------------------------------------------------
-TOTAL:                     45 PASSED (100% Green across 10 test suites)
+Test File                       Tests Passed   Coverage Area
+-----------------------------------------------------------------------------------------------------------------------
+tests/evaluator.test.ts         10 passed      Pure policy engine, status invariants, fail-safe defaults
+tests/gateway.test.ts            4 passed      Scenarios A/B/C, state assertions, HMAC tool token check
+tests/approvals.test.ts          6 passed      Approval queue, role checks, idempotency, revalidation
+tests/recovery.test.ts           2 passed      Bounded diagnostics, Diff Guard rejection, verified recovery
+tests/api.test.ts                5 passed      REST endpoints for agents, policies, and action evaluate
+tests/health.test.ts             2 passed      Health check telemetry, database connection, demo reset
+tests/rehearsal.test.ts          1 passed      End-to-end full demo lifecycle rehearsal from clean state
+tests/allocation.test.ts         7 passed      Deterministic task intake, routing, role checks & escalation
+tests/dashboard.test.ts          4 passed      Executive risk, usage, intervention metrics & value models
+tests/report.test.ts             4 passed      11-section audit-ready incident accountability report
+tests/defenceScenarios.test.ts  12 passed      Defence Scenarios 1-5: maintenance, cyber, recon, uncertainty, sandbox
+-----------------------------------------------------------------------------------------------------------------------
+TOTAL:                          57 PASSED (100% Green across 11 test suites)
 ```
 
 ---
 
 ## 6. Demo Script for Judges
 
-When presenting to hackathon judges, follow this 3-minute sequence using the Operator Console at `http://localhost:5173`:
+When presenting to hackathon judges, follow this concise sequence using the Operator Console at `http://localhost:5173`:
 
+### Part A: Baseline AI Governance Flow
 1. **Clean Baseline:** Click **"🔄 Demo Reset"** in the top right. Show that `doc-agent-01` is `ACTIVE` with `POL-DOC-READ` and `POL-DOC-DELETE` in place.
 2. **Scenario A (Permitted):** In **Tab 3 (Action Launcher)**, click **"Run Scenario A"**.
-   - Show Decision Badge: `ALLOW`.
-   - Show Execution Badge: `SUCCEEDED`.
-   - Point out that simulated protected document was read and logged.
+   - Decision Badge: `ALLOW` | Execution: `SUCCEEDED`.
+   - Point out that simulated protected document was read cleanly.
 3. **Scenario B (Approval Required):** Click **"Run Scenario B"**.
-   - Show Decision Badge: `REQUIRE_APPROVAL`.
-   - Show Execution Badge: `NOT_EXECUTED (APPROVAL_PENDING)`.
-   - Switch to **Tab 4 (Approvals Inbox)**, enter a reason, and click **"Approve & Execute"**.
-   - Show that execution now transitions to `SUCCEEDED`.
+   - Decision Badge: `REQUIRE_APPROVAL` | Execution: `NOT_EXECUTED (APPROVAL_PENDING)`.
+   - Switch to **Tab 4 (Approvals Inbox)**, enter justification, click **"Approve & Execute"**. Execution transitions to `SUCCEEDED`.
 4. **Scenario C (Violation Containment):** Return to **Tab 3** and click **"Run Scenario C"**.
-   - Show Decision Badge: `BLOCK`.
-   - Show Execution Badge: `NOT_EXECUTED (BLOCKED_BY_POLICY)`.
-   - Show that the agent badge in the header instantly flipped to **`PAUSED`**.
-   - Switch to **Tab 5 (Incidents)** to show that an incident was automatically opened.
-5. **Diagnostics & Sandbox Repair:**
-   - In **Tab 5**, click **"Run Signature Diagnostics"**. Show that it identified `SIG-DISALLOWED-OP` from recorded telemetry.
-   - Switch to **Tab 6 (Sandbox & Verified Recovery)**.
-   - Click **"Test Faulty/Attacking Patch"**: Show the Diff Guard catch it immediately (`FAIL` on S2/S3). The agent remains `PAUSED`.
-   - Click **"Test Safe Correction"**: Show that all structural checks (S1–S6) and behavioural checks (B1–B6) pass with verdict `PASS`.
-   - Click **"1. Approve Correction"** (Reviewer role).
-   - Click **"2. Apply Patch to Agent"**.
-   - Click **"3. Resume Agent"**: Show that the Central Resume Gate validates all preconditions (R1–R9) and transitions the agent back to **`ACTIVE`**.
-6. **Accountability & Leadership Reporting:**
-   - Switch to **Tab 5 (Incidents)** and click **"Generate 11-Section Audit Report"** to show full incident accountability breakdown.
-   - Switch to **Tab 1 (Leadership Dashboard)** to view real-time risk posture, usage, intervention metrics, and cost/value estimates with the mandatory `SIMULATED ESTIMATE` banner.
-   - Switch to **Tab 8 (Audit Trail)** to show the complete tamper-evident audit history with linked correlation IDs and SHA-256 hashes.
+   - Decision Badge: `BLOCK` | Execution: `NOT_EXECUTED (BLOCKED_BY_POLICY)`.
+   - Show that the agent badge in the header instantly flipped to **`PAUSED`**, and an incident opened in **Tab 5**.
+
+### Part B: AegisOS Defence Scenarios (Synthetic / Unclassified Data)
+5. **Defence Scenario 1 (Valid Predictive Maintenance):** In **Tab 3**, click **"Defence Scenario 1"**.
+   - Telemetry from `turbine_unit_4` is fresh (<3600s) and within safe physical thresholds.
+   - Decision: `ALLOW` | Execution: `SUCCEEDED`. Maintenance ticket generated in synthetic maintenance queue.
+6. **Defence Scenario 2 (Stale Telemetry Held for Human Review):** Click **"Defence Scenario 2"**.
+   - Telemetry timestamp is aged >7200s (exceeds 3600s window).
+   - Decision: `REQUIRE_APPROVAL` with code `STALE_TELEMETRY_HELD_FOR_HUMAN`.
+   - Ticket count remains 0 (zero unverified side effects).
+   - In **Tab 4 (Approvals Inbox)**, human engineer reviews and approves with reason.
+7. **Defence Scenario 3 (Prohibited Cybersecurity Action):** Click **"Defence Scenario 3"**.
+   - Cyber monitoring agent attempts `wipe_credentials` on DMZ enclave firewall.
+   - Decision: `BLOCK` with `POLICY_DECISION_BLOCK`.
+   - Agent `agent-cyber-monitor-02` immediately flipped to **`PAUSED`**, incident opened with `critical` severity. Target enclave firewall verified untouched.
+8. **Defence Scenario 4 (Conflicting Reconnaissance Reports Held):** Click **"Defence Scenario 4"**.
+   - Tactical drone and satellite reports offer contradictory observations on target bridge status.
+   - Decision: `REQUIRE_APPROVAL` with code `CONFLICTING_EVIDENCE_HELD_FOR_HUMAN`.
+   - No tactical briefing issued until human intelligence commander reviews in **Tab 4** and provides authorization.
+9. **Defence Scenario 5 (Verified Diagnostics, Sandbox & Central Resume Gate):**
+   - In **Tab 5 (Incidents)**, click **"Run Signature Diagnostics"** on the paused cyber agent. Closed catalog identifies `SIG-DISALLOWED-OP`.
+   - Switch to **Tab 6 (Sandbox & Recovery)**.
+   - Test Attacking Patch: Diff Guard immediately catches attempt to widen capability (`FAIL` on S2/S3). Resumption blocked.
+   - Test Safe Patch: Replaces prohibited wipe with bounded `isolate_host`. S1–S6 structural checks and B1–B6 behavioural checks return `PASS`.
+   - Reviewer approves, admin applies patch, and Central Resume Gate validates R1–R9 to restore agent to **`ACTIVE`**.
+   - Subsequent legitimate log reads execute cleanly (`ALLOW`).
+
+### Part C: Accountability & Executive Intelligence
+10. **11-Section Audit Report:** In **Tab 5**, click **"Generate 11-Section Audit Report"** to show complete incident timeline with linked cryptographic hashes.
+11. **Leadership Dashboard:** Switch to **Tab 1** to review aggregated risk and usage metrics by agent category with the mandatory `SIMULATED ESTIMATE` banner.
 
 ---
 
@@ -323,7 +341,7 @@ When presenting to hackathon judges, follow this 3-minute sequence using the Ope
 
 ---
 
-## 10. AegisOS Defence-Specific Adaptation (Phases A – F)
+## 9. AegisOS Defence-Specific Adaptation (Phases A – F)
 
 Following the `AEGISOS_DEFENCE_ADAPTATION_PLAN.md` specification, the platform was adapted into **AegisOS** without rewriting verified core functionality or introducing an LLM into the enforcement path.
 
@@ -335,7 +353,7 @@ Following the `AEGISOS_DEFENCE_ADAPTATION_PLAN.md` specification, the platform w
 - **Schema Migration (`schema.ts`):** Added `agent_category`, `owner_team`, `risk_level`, `input_requirements`, `uncertainty_rule`, `demo_data_only` to `agents`; added `agent_category` and `evidence_checks` to `action_requests` and `incidents`.
 - **Three Synthetic Defence Agent Profiles (`seed.ts`):**
   1. `agent-pred-maint-01`: Category `predictive_maintenance`, risk `medium`, owner `Fleet Maintenance Wing`. Configured with vibration (10–120 Hz), temperature (20–130°C), pressure (1000–3500 psi) ranges, freshness limit 3600s, max uncertainty 0.35.
-  2. `agent-cyber-monitor-02`: Category `cybersecurity_monitoring`, risk `high`, owner `Defensive Cyber Operations`. Permitted operations: `read_security_logs`, `isolate_host`, `block_ip`. Prohibited operation: `wipe_credentials` on DMZ.
+  2. `agent-cyber-monitor-02`: Category `cybersecurity_monitoring`, risk `high`, owner `Defensive Cyber Operations`. Permitted operations: `read_security_logs`, `isolate_host`, `block_ip`, `write_summary`. Prohibited operation: `wipe_credentials` on DMZ.
   3. `agent-decision-support-03`: Category `decision_support`, risk `high`, owner `Joint Intelligence Support Element`. Permitted operations: `read_recon_report`, `propose_tactical_recommendation`. Enforces multi-source conflict detection and max uncertainty 0.25.
 - **Protected Simulated Tool Boundary (`protectedTools.ts`):** Expanded private synthetic state to hold telemetry readings, maintenance tickets, firewall IP tables, enclave isolation statuses, recon reports, and tactical briefings.
 
@@ -350,29 +368,32 @@ Following the `AEGISOS_DEFENCE_ADAPTATION_PLAN.md` specification, the platform w
 - **Fail-Safe Precedence Invariant:** Explicit policy prohibitions (`BLOCK`) immediately take precedence over quality holds. Input quality failures map to `REQUIRE_APPROVAL` (hold for human analyst) or `BLOCK`.
 
 ### Phase D: Defence Scenarios & End-to-End Test Suite
-- **Test Suite (`backend/tests/defenceScenarios.test.ts`):** 10 automated test cases verifying:
+- **Test Suite (`backend/tests/defenceScenarios.test.ts`):** 12 automated test cases verifying:
   - Scenario 1: Fresh telemetry allows maintenance ticket creation (Gate: `ALLOW`, Execution: `SUCCEEDED`).
-  - Scenario 2: Stale telemetry held for human review (Gate: `REQUIRE_APPROVAL`, Code: `STALE_TELEMETRY_HELD_FOR_HUMAN`, Ticket count unchanged).
-  - Scenario 3: Prohibited credential wipe triggers hard block, pauses agent, opens incident (Gate: `BLOCK`, Code: `POLICY_PROHIBITED_OPERATION`, Tool uninvoked).
-  - Scenario 4: Conflicting recon reports held for human review (Gate: `REQUIRE_APPROVAL`, Code: `CONFLICTING_EVIDENCE_HELD_FOR_HUMAN`, No briefing published).
-  - Out-of-range sensor readings trigger quality hold.
-  - Missing mandatory uncertainty metadata held for human review without hallucinating confidence.
-  - High uncertainty exceeding configured threshold triggers human review.
-  - Approval cannot override policy prohibition.
-  - Zero protected tool invocation or state changes on held/blocked requests (Gate G1).
-  - Append-only audit events capture full evidence check results and reason codes.
+  - Scenario 2A: Missing required telemetry fields blocks request before tool invocation.
+  - Scenario 2B: Stale equipment telemetry holds recommendation in approval queue for human review (`REQUIRE_APPROVAL`, `STALE_TELEMETRY_HELD_FOR_HUMAN`).
+  - Scenario 2C: Out-of-bounds telemetry values fail range validation and are blocked.
+  - Scenario 3: Prohibited credential wipe triggers hard block, pauses agent, opens incident (Gate: `BLOCK`, Code: `POLICY_DECISION_BLOCK`, Tool uninvoked).
+  - Scenario 4: Conflicting recon reports held for human review (Gate: `REQUIRE_APPROVAL`, Code: `CONFLICTING_EVIDENCE_HELD_FOR_HUMAN`).
+  - Scenario 4 (Approval Execution): Written human authorization executes recommendation cleanly (`SUCCEEDED`, `RECOMMENDATION_PUBLISHED`).
+  - Scenario 5: Full recovery lifecycle for paused defence agent via Bounded Diagnostics, Sandbox, and Central Resume Gate.
+  - Uncertainty Assessment: Missing uncertainty metadata held for human review without hallucinating confidence.
+  - Uncertainty Assessment: High uncertainty exceeding configured threshold triggers human review.
+  - Policy Prohibition Invariant: Approval cannot override policy prohibition.
+  - Incident Accountability Report: Enriched with Section 2 agentCategory and Section 4 evidenceChecks.
 
-### Phase E: UI Operator Console Adaptation
+### Phase E: UI Operator Console Adaptation & Dashboard Analytics
 - **Persistent Header Banner:** Sticky top banner reading: `DEMO ENVIRONMENT — SYNTHETIC, NON-OPERATIONAL DATA ONLY — NO CONNECTION TO CLASSIFIED DEFENCE NETWORKS`.
 - **Rebranded Header:** `🛡️ AegisOS — Defence AI Governance & Human Accountability Control Plane`.
 - **Scenario Quick Launcher (Tab 3):** 1-click execution for Defence Scenarios 1–4 alongside baseline Scenarios A–C.
 - **Input Quality & Uncertainty Evidence Audit Card:** Visual pass/fail status, badges for all 6 checks performed, failure alerts, and audit telemetry breakdown.
 - **Enriched Agent Registry (Tab 7):** Displays category badges, operational purposes, owner teams, risk levels, uncertainty rules, and `SYNTHETIC DATA` badges.
 - **Incident Accountability Report (Tab 5):** 11-section chain displaying `agentCategory` and `evidenceChecks` audit findings.
+- **Leadership Dashboard (Tab 1):** Aggregated risk posture and request telemetry by `agent_category` (`risk.agentsByCategory`, `usage.requestsByCategory`).
 
 ---
 
-## 11. Verification Summary
+## 10. Verification Summary
 
 ```text
 ✓ tests/rehearsal.test.ts (1 test)
@@ -385,11 +406,11 @@ Following the `AEGISOS_DEFENCE_ADAPTATION_PLAN.md` specification, the platform w
 ✓ tests/health.test.ts (2 tests)
 ✓ tests/recovery.test.ts (2 tests)
 ✓ tests/evaluator.test.ts (10 tests)
-✓ tests/defenceScenarios.test.ts (10 tests)
+✓ tests/defenceScenarios.test.ts (12 tests)
 
 Test Files:  11 passed (11)
-Tests:       55 passed (55)
-Duration:    5.27s
+Tests:       57 passed (57)
+Duration:    ~6.4s
 ```
 
-All 55 tests pass cleanly. Both backend and frontend build with 0 TypeScript and build errors.
+All 57 tests pass cleanly across 11 test suites. Both backend and frontend build with 0 TypeScript and build errors.

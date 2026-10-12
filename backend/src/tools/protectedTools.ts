@@ -180,6 +180,7 @@ function _toolProposeTacticalRecommendation(resource: string, params: any): any 
   const briefingId = `TAC-BRIEF-SYN-${Date.now().toString(36).toUpperCase()}`;
   const record = {
     briefing_id: briefingId,
+    status: 'RECOMMENDATION_PUBLISHED',
     target_resource: resource,
     recommendation: params.recommendation || 'Hold movement pending multi-sensor reconnaissance confirmation',
     confidence: params.confidence || 'MODERATE',
