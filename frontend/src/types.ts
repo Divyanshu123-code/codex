@@ -116,6 +116,7 @@ export interface Approval {
   request_explanation?: string;
   execution_status?: string;
   non_execution_reason?: string;
+  reopened_from_id?: string | null;
 }
 
 export interface Incident {

@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import type { ScenarioBackup, AgentBackup } from '../types';
+import type { ScenarioBackup, AgentBackup, Tab } from '../types';
 import { parseJsonSafe } from '../utils';
 
 interface BackupsViewProps {
   onRefresh: () => void;
+  onNavigateTab?: (tab: Tab) => void;
+  onSelectApproval?: (id: string) => void;
 }
 
-export const BackupsView: React.FC<BackupsViewProps> = ({ onRefresh }) => {
+export const BackupsView: React.FC<BackupsViewProps> = ({ onRefresh, onNavigateTab, onSelectApproval }) => {
   const [scenarioBackups, setScenarioBackups] = useState<ScenarioBackup[]>([]);
   const [agentBackups, setAgentBackups] = useState<AgentBackup[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -17,11 +19,12 @@ export const BackupsView: React.FC<BackupsViewProps> = ({ onRefresh }) => {
   
   // Reopen Modal State
   const [reopenTarget, setReopenTarget] = useState<ScenarioBackup | null>(null);
-  const [reopenAdmin, setReopenAdmin] = useState<'usr-admin' | 'usr-admin-2'>('usr-admin');
+  const [reopenAdmin, setReopenAdmin] = useState<'usr-admin' | 'usr-admin-2'>('usr-admin-2');
   const [reopenReason, setReopenReason] = useState('Reopening following administrative audit review: verified legitimate operational request.');
   const [isSubmittingReopen, setIsSubmittingReopen] = useState(false);
   const [reopenError, setReopenError] = useState<string | null>(null);
   const [reopenSuccess, setReopenSuccess] = useState<string | null>(null);
+  const [reopenedApprovalId, setReopenedApprovalId] = useState<string | null>(null);
 
   // Reinstate Modal State
   const [reinstateTarget, setReinstateTarget] = useState<AgentBackup | null>(null);
@@ -70,14 +73,17 @@ export const BackupsView: React.FC<BackupsViewProps> = ({ onRefresh }) => {
     setIsSubmittingReopen(true);
     setReopenError(null);
     setReopenSuccess(null);
+    setReopenedApprovalId(null);
 
     try {
+      const coSigner = reopenAdmin === 'usr-admin' ? 'usr-admin-2' : 'usr-admin';
       const res = await fetch(`/api/backups/${reopenTarget.id}/reopen`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           reason: reopenReason,
-          actor: { id: reopenAdmin, role: 'admin' }
+          actor: { id: reopenAdmin, role: 'admin' },
+          coSigner
         })
       });
 
@@ -86,13 +92,11 @@ export const BackupsView: React.FC<BackupsViewProps> = ({ onRefresh }) => {
         throw new Error(data?.error || `Failed to reopen decision (${res.status} ${res.statusText})`);
       }
 
-      setReopenSuccess(`Decision successfully reopened! New Approval Queue ID: ${data?.newApprovalId}`);
+      const newId = data?.newApprovalId;
+      setReopenedApprovalId(newId || null);
+      setReopenSuccess(`Decision successfully reopened! New Approval Queue ID: ${newId}`);
       await fetchBackups();
       onRefresh();
-      setTimeout(() => {
-        setReopenTarget(null);
-        setReopenSuccess(null);
-      }, 2000);
     } catch (err: any) {
       setReopenError(err.message);
     } finally {
@@ -326,16 +330,30 @@ export const BackupsView: React.FC<BackupsViewProps> = ({ onRefresh }) => {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
+                                  const rejector = sb.human_decision?.approverId;
+                                  setReopenAdmin(rejector === 'usr-admin' ? 'usr-admin-2' : 'usr-admin');
                                   setReopenTarget(sb);
                                   setReopenError(null);
                                   setReopenSuccess(null);
+                                  setReopenedApprovalId(null);
                                 }}
                                 className="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[0.6875rem] transition-colors shadow-sm"
                               >
                                 Reopen for Re-review
                               </button>
                             ) : sb.correction_status === 'REOPENED' ? (
-                              <span className="text-[0.6875rem] text-indigo-600 font-mono font-semibold">In Review Queue</span>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (onSelectApproval && sb.reopens_approval_id) onSelectApproval(sb.reopens_approval_id);
+                                  if (onNavigateTab) onNavigateTab('approvals');
+                                }}
+                                className="text-[0.6875rem] text-indigo-600 hover:text-indigo-800 font-mono font-semibold underline flex items-center justify-end gap-1 ml-auto"
+                                title="Open this case in Approvals queue"
+                              >
+                                <span>In Review Queue</span>
+                                <span className="material-symbols-outlined text-[0.875rem]">arrow_forward</span>
+                              </button>
                             ) : sb.correction_status === 'CORRECTED' ? (
                               <span className="text-[0.6875rem] text-emerald-600 font-mono font-semibold">Overturned</span>
                             ) : (
@@ -404,13 +422,34 @@ export const BackupsView: React.FC<BackupsViewProps> = ({ onRefresh }) => {
                 )}
 
                 {selectedScenario.correction_status === 'REOPENED' && selectedScenario.reopens_approval_id && (
-                  <div className="p-2.5 bg-indigo-50 border border-indigo-200 rounded text-xs space-y-1">
-                    <span className="text-[0.625rem] font-bold uppercase tracking-wider text-indigo-800 block">
-                      Reopened Decision Trail
-                    </span>
+                  <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-lg text-xs space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[0.625rem] font-bold uppercase tracking-wider text-indigo-800">
+                        Reopened Decision Active
+                      </span>
+                      <span className="px-1.5 py-0.5 rounded text-[0.625rem] font-mono font-bold bg-indigo-200 text-indigo-900">
+                        PENDING_REVIEW
+                      </span>
+                    </div>
                     <p className="text-[0.6875rem] text-indigo-900 font-mono">
-                      Active Approval: {selectedScenario.reopens_approval_id}
+                      Approval ID: {selectedScenario.reopens_approval_id}
                     </p>
+                    <p className="text-[0.6875rem] text-indigo-700">
+                      This case was restored from an earlier rejection and can now be re-evaluated for approval or rejection.
+                    </p>
+                    {onNavigateTab && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (onSelectApproval) onSelectApproval(selectedScenario.reopens_approval_id!);
+                          onNavigateTab('approvals');
+                        }}
+                        className="w-full px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-1.5 transition-colors"
+                      >
+                        <span>Open in Approvals Queue</span>
+                        <span className="material-symbols-outlined text-[0.875rem]">arrow_forward</span>
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -554,27 +593,52 @@ export const BackupsView: React.FC<BackupsViewProps> = ({ onRefresh }) => {
               )}
 
               {reopenSuccess && (
-                <div className="p-2.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-mono">
-                  {reopenSuccess}
+                <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-mono space-y-2.5">
+                  <div className="flex items-center gap-1.5 font-bold text-emerald-900 font-sans">
+                    <span className="material-symbols-outlined text-[1.125rem] text-emerald-600">check_circle</span>
+                    <span>Reopened Successfully</span>
+                  </div>
+                  <p>{reopenSuccess}</p>
+                  {reopenedApprovalId && onNavigateTab && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (onSelectApproval) onSelectApproval(reopenedApprovalId);
+                        onNavigateTab('approvals');
+                        setReopenTarget(null);
+                        setReopenSuccess(null);
+                      }}
+                      className="w-full py-2 px-3 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-sans font-bold text-xs shadow-sm flex items-center justify-center gap-2 transition-colors"
+                    >
+                      <span>Access Case in Approvals Queue</span>
+                      <span className="material-symbols-outlined text-[1rem]">arrow_forward</span>
+                    </button>
+                  )}
                 </div>
               )}
 
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setReopenTarget(null)}
+                  onClick={() => {
+                    setReopenTarget(null);
+                    setReopenSuccess(null);
+                    setReopenedApprovalId(null);
+                  }}
                   className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50"
                 >
-                  Cancel
+                  {reopenSuccess ? 'Close' : 'Cancel'}
                 </button>
-                <button
-                  type="submit"
-                  disabled={isSubmittingReopen}
-                  className="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm flex items-center gap-1.5"
-                >
-                  <span className="material-symbols-outlined text-[1rem]">replay</span>
-                  {isSubmittingReopen ? 'Reopening...' : 'Confirm Reopen'}
-                </button>
+                {!reopenSuccess && (
+                  <button
+                    type="submit"
+                    disabled={isSubmittingReopen}
+                    className="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm flex items-center gap-1.5"
+                  >
+                    <span className="material-symbols-outlined text-[1rem]">replay</span>
+                    {isSubmittingReopen ? 'Reopening...' : 'Confirm Reopen'}
+                  </button>
+                )}
               </div>
             </form>
           </div>

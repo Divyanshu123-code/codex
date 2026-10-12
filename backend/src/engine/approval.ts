@@ -1,4 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
+import crypto from 'node:crypto';
 import { getDatabase } from '../db/connection.js';
 import { writeAuditEvent } from './gateway.js';
 import {
@@ -55,7 +56,7 @@ export function decideApproval(
   if (decision === 'APPROVED' && approvalRow.reopened_from_id) {
     const origAppr = targetDb.prepare('SELECT approver_id FROM approvals WHERE id = ?').get(approvalRow.reopened_from_id) as any;
     if (origAppr && origAppr.approver_id === approver.id) {
-      throw new Error('SEPARATION_OF_DUTIES_VIOLATION: Cannot approve a reopened request that you previously rejected.');
+      throw new Error('SEPARATION_OF_DUTIES_VIOLATION: Cannot approve a reopened request that you previously rejected. Secondary administrator (e.g. usr-admin-2) clearance is required to approve.');
     }
   }
 
@@ -111,13 +112,58 @@ export function decideApproval(
         reason,
         decidedAt: now
       });
-      targetDb.prepare(`
+
+      const updateResult = targetDb.prepare(`
         UPDATE scenario_backups
         SET human_decision = ?, execution_status = 'NOT_EXECUTED'
         WHERE request_id = ?
       `).run(decisionDetails, requestId);
-    } catch {
-      // Table may not exist or row missing
+
+      if (updateResult.changes === 0) {
+        // Automatically create the backup snapshot so this rejected case is guaranteed in Backup & Recovery!
+        const backupId = `sbkp-${now}-${Math.random().toString(36).substring(2, 7)}`;
+        const snapshotPayload = JSON.stringify({
+          backupId,
+          requestId,
+          agentId: requestRow.agent_id,
+          operation: requestRow.operation,
+          parameters: requestRow.parameters,
+          decision: 'REJECTED',
+          reason,
+          timestamp: now
+        });
+        const snapshotHash = crypto.createHash('sha256').update(snapshotPayload).digest('hex');
+
+        targetDb.prepare(`
+          INSERT INTO scenario_backups (
+            id, correlation_id, request_id, agent_id, agent_category, policy_id, policy_version,
+            policy_hash, operation, amount, parameters_snapshot, evidence_checks, decision,
+            reason_code, approval_id, human_decision, execution_status, snapshot_hash, created_at, correction_status
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'NOT_EXECUTED', ?, ?, 'NONE')
+        `).run(
+          backupId,
+          requestId,
+          requestId,
+          requestRow.agent_id,
+          requestRow.agent_category || 'unknown',
+          requestRow.policy_id,
+          requestRow.policy_version,
+          null,
+          requestRow.operation,
+          null,
+          typeof requestRow.parameters === 'string' ? requestRow.parameters : JSON.stringify(requestRow.parameters || {}),
+          typeof requestRow.evidence_checks === 'string' ? requestRow.evidence_checks : (requestRow.evidence_checks ? JSON.stringify(requestRow.evidence_checks) : null),
+          requestRow.gate_decision || 'REQUIRE_APPROVAL',
+          requestRow.gate_reason_code || 'APPROVAL_REJECTED',
+          approvalId,
+          decisionDetails,
+          snapshotHash,
+          now
+        );
+      }
+    } catch (e) {
+      console.error('Failed to create/update scenario backup on rejection:', e);
     }
 
     writeAuditEvent({

@@ -275,6 +275,8 @@ export function App() {
           {activeTab === 'backups' && (
             <BackupsView
               onRefresh={refreshData}
+              onNavigateTab={setActiveTab}
+              onSelectApproval={handleSelectApproval}
             />
           )}
         </main>

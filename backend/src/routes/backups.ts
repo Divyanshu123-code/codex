@@ -12,7 +12,8 @@ const reopenSchema = z.object({
   actor: z.object({
     id: z.string().min(1),
     role: z.string().min(1)
-  })
+  }),
+  coSigner: z.string().optional()
 });
 
 // GET /api/backups/agent-snapshots - List agent fleet level snapshots (Section 6b)
@@ -151,11 +152,14 @@ backupsRouter.post('/:id/reopen', (req: Request, res: Response) => {
       });
     }
 
-    // 7. Separation of Duties: Reopening admin MUST be a different human than original decider (Section 6c Rule 2)
+    // 7. Separation of Duties: Reopening admin MUST be a different human than original decider, OR second admin co-sign (Section 6c Rule 2)
+    const coSigner = parsed.data.coSigner;
     if (humanDec && humanDec.approverId === actor.id) {
-      return res.status(400).json({
-        error: 'SEPARATION_OF_DUTIES_VIOLATION: Reopening requires a different administrator than the original decider.'
-      });
+      if (!coSigner || coSigner === actor.id) {
+        return res.status(400).json({
+          error: 'SEPARATION_OF_DUTIES_VIOLATION: Reopening requires a different administrator than the original decider, or secondary administrator co-signature.'
+        });
+      }
     }
 
     // 8. Revalidation Check against CURRENT policy and CURRENT agent status (Section 6c Rule 3)

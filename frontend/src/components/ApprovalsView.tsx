@@ -21,7 +21,7 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
 
   const [statusFilter, setStatusFilter] = useState<'all' | 'PENDING' | 'APPROVED' | 'REJECTED'>('all');
   const [writtenReason, setWrittenReason] = useState('Authorized by lead reviewer for mission brief');
-  const [reviewerUser, setReviewerUser] = useState<'usr-reviewer' | 'usr-admin'>('usr-reviewer');
+  const [reviewerUser, setReviewerUser] = useState<'usr-reviewer' | 'usr-admin' | 'usr-admin-2'>('usr-reviewer');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [decisionResult, setDecisionResult] = useState<any>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -444,6 +444,20 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
                   SECTION E · HUMAN CLEARANCE CONTROLS
                 </span>
 
+                {selectedApproval.reopened_from_id && (
+                  <div className="p-2.5 rounded-lg bg-indigo-50 border border-indigo-200 text-xs text-indigo-900 flex items-start gap-2">
+                    <span className="material-symbols-outlined text-indigo-600 text-[1.125rem]">settings_backup_restore</span>
+                    <div>
+                      <strong className="block text-[0.6875rem] font-bold text-indigo-950 uppercase tracking-wider">
+                        Reopened Case (Overturned Rejection)
+                      </strong>
+                      <span className="text-[0.6875rem] text-indigo-800 leading-relaxed block mt-0.5">
+                        This request was recovered from an initial rejection ({selectedApproval.reopened_from_id}). Review the evidence above to either <strong>Approve & Execute</strong> or <strong>Reject</strong>.
+                      </span>
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <label className="text-[0.6875rem] font-semibold text-slate-700 block mb-1">
                     Reviewer Identity & Clearance Role:
@@ -455,6 +469,7 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
                   >
                     <option value="usr-reviewer">usr-reviewer (Delegated Governance Reviewer)</option>
                     <option value="usr-admin">usr-admin (Mission Director & System Administrator)</option>
+                    <option value="usr-admin-2">usr-admin-2 (Secondary Governance Director)</option>
                   </select>
                 </div>
 
