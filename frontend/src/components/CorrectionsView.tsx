@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { Correction, Tab } from '../types';
+import { parseJsonSafe } from '../utils';
 
 interface CorrectionsViewProps {
   corrections: Correction[];
@@ -43,7 +44,10 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: 'usr-admin' })
       });
-      await res.json();
+      const data = await parseJsonSafe(res);
+      if (!res.ok) {
+        throw new Error(data?.error || `Sandbox verification failed (${res.status})`);
+      }
       setActionMessage(`Sandbox verification complete: S1-S6 Passed, B1-B6 Passed, Diff Guard Cleared.`);
       onRefresh();
     } catch (err: any) {
@@ -62,7 +66,10 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: 'usr-admin', reason: 'Preconditions verified through central resume gate' })
       });
-      await res.json();
+      const data = await parseJsonSafe(res);
+      if (!res.ok) {
+        throw new Error(data?.error || `Recovery execution failed (${res.status})`);
+      }
       setActionMessage(`Recovery executed: Patch applied, Central Resume Gate passed, Agent reactivated!`);
       onRefresh();
     } catch (err: any) {

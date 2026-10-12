@@ -13,6 +13,8 @@ import { AuditLogView } from './components/AuditLogView';
 import { BackupsView } from './components/BackupsView';
 import { ScenarioLauncherModal } from './components/ScenarioLauncherModal';
 
+import { parseJsonSafe } from './utils';
+
 export function App() {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   
@@ -58,14 +60,38 @@ export function App() {
         fetch('/api/dashboard/overview')
       ]);
 
-      if (agentsRes.ok) setAgents(await agentsRes.json());
-      if (policiesRes.ok) setPolicies(await policiesRes.json());
-      if (approvalsRes.ok) setApprovals(await approvalsRes.json());
-      if (incidentsRes.ok) setIncidents(await incidentsRes.json());
-      if (correctionsRes.ok) setCorrections(await correctionsRes.json());
-      if (tasksRes.ok) setTasks(await tasksRes.json());
-      if (auditRes.ok) setAuditEvents(await auditRes.json());
-      if (dashboardRes.ok) setDashboardData(await dashboardRes.json());
+      if (agentsRes.ok) {
+        const data = await parseJsonSafe(agentsRes);
+        if (data) setAgents(data);
+      }
+      if (policiesRes.ok) {
+        const data = await parseJsonSafe(policiesRes);
+        if (data) setPolicies(data);
+      }
+      if (approvalsRes.ok) {
+        const data = await parseJsonSafe(approvalsRes);
+        if (data) setApprovals(data);
+      }
+      if (incidentsRes.ok) {
+        const data = await parseJsonSafe(incidentsRes);
+        if (data) setIncidents(data);
+      }
+      if (correctionsRes.ok) {
+        const data = await parseJsonSafe(correctionsRes);
+        if (data) setCorrections(data);
+      }
+      if (tasksRes.ok) {
+        const data = await parseJsonSafe(tasksRes);
+        if (data) setTasks(data);
+      }
+      if (auditRes.ok) {
+        const data = await parseJsonSafe(auditRes);
+        if (data) setAuditEvents(data);
+      }
+      if (dashboardRes.ok) {
+        const data = await parseJsonSafe(dashboardRes);
+        if (data) setDashboardData(data);
+      }
     } catch (err) {
       console.error('Failed to poll control plane backend:', err);
     } finally {
@@ -87,8 +113,8 @@ export function App() {
       body: JSON.stringify({ userId: 'usr-admin', reason })
     });
     if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Failed to pause agent');
+      const err = await parseJsonSafe(res);
+      throw new Error(err?.error || `Failed to pause agent (${res.status} ${res.statusText})`);
     }
     await refreshData();
   };
@@ -100,8 +126,8 @@ export function App() {
       body: JSON.stringify({ userId: 'usr-admin', reason })
     });
     if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Failed to resume agent: Preconditions unmet');
+      const err = await parseJsonSafe(res);
+      throw new Error(err?.error || `Failed to resume agent (${res.status} ${res.statusText})`);
     }
     await refreshData();
   };
@@ -118,10 +144,10 @@ export function App() {
       body: JSON.stringify({ status, reason, userId })
     });
     if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Decision failed');
+      const err = await parseJsonSafe(res);
+      throw new Error(err?.error || `Decision failed (${res.status} ${res.statusText})`);
     }
-    const data = await res.json();
+    const data = await parseJsonSafe(res);
     await refreshData();
     return data;
   };

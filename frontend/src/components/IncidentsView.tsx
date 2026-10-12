@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { Incident, Tab } from '../types';
+import { parseJsonSafe } from '../utils';
 
 interface IncidentsViewProps {
   incidents: Incident[];
@@ -37,7 +38,7 @@ export const IncidentsView: React.FC<IncidentsViewProps> = ({
     setIsReportLoading(true);
     try {
       const res = await fetch(`/api/incidents/${incidentId}/report`);
-      const data = await res.json();
+      const data = await parseJsonSafe(res);
       setReportData(data);
     } catch (err) {
       console.error(err);
@@ -54,7 +55,7 @@ export const IncidentsView: React.FC<IncidentsViewProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: 'usr-admin' })
       });
-      const data = await res.json();
+      const data = await parseJsonSafe(res);
       setTriageData(data);
     } catch (err) {
       console.error(err);

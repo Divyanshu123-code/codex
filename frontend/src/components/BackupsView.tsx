@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { ScenarioBackup, AgentBackup } from '../types';
+import { parseJsonSafe } from '../utils';
 
 interface BackupsViewProps {
   onRefresh: () => void;
@@ -38,14 +39,19 @@ export const BackupsView: React.FC<BackupsViewProps> = ({ onRefresh }) => {
         fetch('/api/backups/agent-snapshots')
       ]);
       if (scenariosRes.ok) {
-        const data = await scenariosRes.json();
-        setScenarioBackups(data);
-        if (data.length > 0 && !selectedScenario) {
-          setSelectedScenario(data[0]);
+        const data = await parseJsonSafe(scenariosRes);
+        if (data) {
+          setScenarioBackups(data);
+          if (data.length > 0 && !selectedScenario) {
+            setSelectedScenario(data[0]);
+          }
         }
       }
       if (agentsRes.ok) {
-        setAgentBackups(await agentsRes.json());
+        const data = await parseJsonSafe(agentsRes);
+        if (data) {
+          setAgentBackups(data);
+        }
       }
     } catch (err) {
       console.error('Failed to fetch backup records:', err);
@@ -75,12 +81,12 @@ export const BackupsView: React.FC<BackupsViewProps> = ({ onRefresh }) => {
         })
       });
 
-      const data = await res.json();
+      const data = await parseJsonSafe(res);
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to reopen decision');
+        throw new Error(data?.error || `Failed to reopen decision (${res.status} ${res.statusText})`);
       }
 
-      setReopenSuccess(`Decision successfully reopened! New Approval Queue ID: ${data.newApprovalId}`);
+      setReopenSuccess(`Decision successfully reopened! New Approval Queue ID: ${data?.newApprovalId}`);
       await fetchBackups();
       onRefresh();
       setTimeout(() => {
@@ -112,9 +118,9 @@ export const BackupsView: React.FC<BackupsViewProps> = ({ onRefresh }) => {
         })
       });
 
-      const data = await res.json();
+      const data = await parseJsonSafe(res);
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to reinstate agent');
+        throw new Error(data?.error || `Failed to reinstate agent (${res.status} ${res.statusText})`);
       }
 
       setReinstateSuccess(`Agent successfully reinstated to RESTRICTED status!`);

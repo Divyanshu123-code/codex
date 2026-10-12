@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { Task, Agent } from '../types';
+import { parseJsonSafe } from '../utils';
 
 interface TasksViewProps {
   tasks: Task[];
@@ -42,8 +43,11 @@ export const TasksView: React.FC<TasksViewProps> = ({
           priority: 'P2'
         })
       });
-      const data = await res.json();
-      setActionMessage(`Task submitted: ${data.id || 'Task created'}`);
+      const data = await parseJsonSafe(res);
+      if (!res.ok) {
+        throw new Error(data?.error || `Task submission failed (${res.status})`);
+      }
+      setActionMessage(`Task submitted: ${data?.id || 'Task created'}`);
       setIsCreatingTask(false);
       onRefresh();
     } catch (err: any) {

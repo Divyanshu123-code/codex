@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { Tab } from '../types';
+import { parseJsonSafe } from '../utils';
 
 interface ScenarioLauncherModalProps {
   isOpen: boolean;
@@ -239,7 +240,10 @@ export const ScenarioLauncherModal: React.FC<ScenarioLauncherModalProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(sc.payload)
       });
-      const data = await res.json();
+      const data = await parseJsonSafe(res);
+      if (!res.ok) {
+        throw new Error(data?.error || `Scenario execution failed (${res.status} ${res.statusText})`);
+      }
       setScenarioOutput(data);
       onRefresh();
     } catch (err: any) {
@@ -273,7 +277,11 @@ export const ScenarioLauncherModal: React.FC<ScenarioLauncherModalProps> = ({
               onClick={async () => {
                 try {
                   setIsRunning(true);
-                  await fetch('/api/demo/reset', { method: 'POST' });
+                  const res = await fetch('/api/demo/reset', { method: 'POST' });
+                  const data = await parseJsonSafe(res);
+                  if (!res.ok) {
+                    throw new Error(data?.error || `Failed to reset demo (${res.status})`);
+                  }
                   onRefresh();
                   setScenarioOutput({ message: 'Demo environment reset and re-seeded successfully.' });
                 } catch (err: any) {

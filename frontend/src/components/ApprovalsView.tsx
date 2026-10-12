@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { Approval } from '../types';
+import { parseJsonSafe } from '../utils';
 
 interface ApprovalsViewProps {
   approvals: Approval[];
@@ -36,8 +37,10 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
         method: 'POST'
       });
       if (res.ok) {
-        const data = await res.json();
-        setAiExplanation(data.explanation);
+        const data = await parseJsonSafe(res);
+        if (data?.explanation) {
+          setAiExplanation(data.explanation);
+        }
       }
     } catch (err) {
       console.error('Failed to get AI explanation:', err);

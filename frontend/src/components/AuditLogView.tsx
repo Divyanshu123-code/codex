@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { AuditEvent } from '../types';
+import { parseJsonSafe } from '../utils';
 
 interface AuditLogViewProps {
   auditEvents: AuditEvent[];
@@ -33,8 +34,8 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({ auditEvents }) => {
     setVerifyResult(null);
     try {
       const res = await fetch('/api/audit/verify', { method: 'POST' });
-      const data = await res.json();
-      setVerifyResult(data);
+      const data = await parseJsonSafe(res);
+      setVerifyResult(data || { verified: false, error: 'Empty verification response' });
     } catch (err: any) {
       setVerifyResult({ verified: false, error: err.message });
     } finally {
