@@ -203,7 +203,7 @@ export function App() {
       <div className="pl-64">
         <main 
           className="relative min-h-screen w-full px-6 py-6"
-          style={{ paddingTop: '6.25rem' }}
+          style={{ paddingTop: '4.5rem' }}
         >
           {activeTab === 'overview' && (
             <OverviewView

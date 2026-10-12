@@ -37,7 +37,10 @@ export async function executeLLMCall(
   const targetDb = db || getDatabase();
   const apiKey = process.env.ANTHROPIC_API_KEY;
   const promptHash = crypto.createHash('sha256').update(options.prompt).digest('hex');
-  const model = options.model || (options.purpose === 'L1_PATCH_PROPOSAL' ? 'claude-3-5-sonnet-20241022' : 'claude-3-5-haiku-20241022');
+  const defaultModel = options.purpose === 'L1_PATCH_PROPOSAL'
+    ? (process.env.LLM_MODEL_PATCH || 'claude-sonnet-5-5')
+    : (process.env.LLM_MODEL_EXPLAIN || 'claude-haiku-5-5');
+  const model = options.model || defaultModel;
 
   let outputText = '';
   let source: 'anthropic_api' | 'deterministic_fallback' = 'deterministic_fallback';

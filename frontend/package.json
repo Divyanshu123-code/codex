@@ -9,6 +9,9 @@
     "lint": "oxlint",
     "preview": "vite preview"
   },
+  "engines": {
+    "node": ">=22.5.0"
+  },
   "dependencies": {
     "@tanstack/react-query": "^5.104.1",
     "lucide-react": "^1.55.0",

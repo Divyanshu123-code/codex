@@ -20,23 +20,8 @@ export const Header: React.FC<HeaderProps> = ({
   onSearchChange
 }) => {
   return (
-    <>
-      {/* 1. Persistent Top Demo Notice Banner */}
-      <div 
-        id="top-demo-banner" 
-        className="fixed top-0 left-0 right-0 h-7 bg-amber-50 border-b border-amber-200/80 z-50 flex items-center justify-center px-4"
-      >
-        <div className="flex items-center gap-2 text-amber-900 font-mono text-[0.6875rem] tracking-wider uppercase font-medium">
-          <span className="w-1.5 h-1.5 rounded-full bg-amber-600 animate-pulse"></span>
-          <span>Demo Environment — Synthetic, Non-Operational Data Only</span>
-          <span className="text-amber-600/70 hidden sm:inline">•</span>
-          <span className="text-amber-700 hidden sm:inline">No Live Weapons or Classified Networks</span>
-        </div>
-      </div>
-
-      {/* 2. Fixed Application Header */}
-      <header className="fixed top-7 left-0 right-0 h-16 bg-white/95 backdrop-blur-md z-40 border-b border-slate-200/80 shadow-[0_1px_8px_rgba(0,0,0,0.03)]">
-        <div className="h-16 w-full px-6 flex items-center justify-between gap-4">
+    <header className="fixed top-0 left-0 right-0 h-16 bg-white/95 backdrop-blur-md z-40 border-b border-slate-200/80 shadow-[0_1px_8px_rgba(0,0,0,0.03)]">
+      <div className="h-16 w-full px-6 flex items-center justify-between gap-4">
           
           {/* Brand Logo & Demarcation */}
           <div className="flex items-center gap-3 min-w-max">
@@ -135,6 +120,5 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
       </header>
-    </>
   );
 };

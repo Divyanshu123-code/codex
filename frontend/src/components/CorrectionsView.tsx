@@ -316,15 +316,15 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
               </span>
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1.5 text-xs">
                 {[
-                  'R1: Incident Closed & Verified',
-                  'R2: Root Cause Identified via Catalog Signature',
-                  'R3: Sandbox Structural Verification Passed (S1–S6)',
-                  'R4: Sandbox Behavioural Regression Passed (B1–B6)',
-                  'R5: Diff Guard Clearance (No Privilege Widening)',
-                  'R6: Target Policy State Confirmed Active',
-                  'R7: Revalidation Under Updated Policy Profile',
-                  'R8: Human Reviewer Clearance Authorization',
-                  'R9: Cryptographic Audit Hash Sealed'
+                  'R1: Human Administrator Role Verified',
+                  'R2: Written Justification Supplied',
+                  'R3: Agent & Policy Version Intact',
+                  'R4: Open Incident Assessment Passed',
+                  'R5: Closed Signature Diagnosed',
+                  'R6: Correction PASS / APPROVED / APPLIED',
+                  'R7: Separation of Duties Enforced',
+                  'R8: Policy Hash Revalidated (Zero Drift)',
+                  'R9: Manual Pause Fallback Clearance'
                 ].map((item, idx) => (
                   <div key={idx} className="flex items-center justify-between text-[0.6875rem]">
                     <span className="font-mono text-slate-700">{item}</span>

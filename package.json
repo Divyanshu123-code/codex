@@ -9,5 +9,8 @@
     "dev:frontend": "npm --prefix frontend run dev",
     "seed": "npm --prefix backend run seed",
     "test:backend": "npm --prefix backend run test"
+  },
+  "engines": {
+    "node": ">=22.5.0"
   }
 }

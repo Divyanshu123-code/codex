@@ -3,10 +3,10 @@
 **Hackathon CODEX 3.0 — Problem Statement 5 (PS5): AI Agent Governance & Control Plane**  
 *An Independent Deterministic Governance Layer for Autonomous Systems (Synthetic, Non-Operational Data Only).*
 
-[![Node.js](https://img.shields.io/badge/Node.js-22%20%7C%2026-brightgreen.svg)](https://nodejs.org)
+[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22.5-brightgreen.svg)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue.svg)](https://www.typescriptlang.org)
 [![Vite](https://img.shields.io/badge/Frontend-React%2019%20%2B%20Vite-646CFF.svg)](https://vitejs.dev)
-[![Tests](https://img.shields.io/badge/Tests-67%20passing%20%2F%2012%20suites-success.svg)]()
+[![Tests](https://img.shields.io/badge/Tests-72%20passing%20%2F%2013%20suites-success.svg)]()
 [![License](https://img.shields.io/badge/Classification-UNCLASSIFIED%20%2F%20SYNTHETIC-orange.svg)]()
 
 > **⚠️ DEMO ENVIRONMENT NOTICE & DEFENCE SCOPE DISCLAIMER:**  
@@ -99,15 +99,21 @@ flowchart TD
         M --> N["Zero Side Effects: Tool Remains Untouched (G1)"]
 
         G --> O["Containment: Auto-Pause Agent & Log Incident"]
-        C1 --> O
-        D1 --> D1_BLOCK["BLOCK: Zero Tool Execution (Sensor Out of Bounds)"]
+        C1 --> C1_BLOCK["BLOCK: Execution Halted (Agent Already Paused)"]
+        D1 --> D1_BLOCK["BLOCK: Zero Tool Execution (Sensor Out of Bounds; Agent Remains Active)"]
         O --> P["Emit Tamper-Evident SHA-256 Audit Event"]
+        C1_BLOCK --> P
+        D1_BLOCK --> P
     end
 
     style S1 fill:#1e293b,stroke:#3b82f6,stroke-width:2px,color:#fff
     style S2 fill:#0f172a,stroke:#6366f1,stroke-width:2px,color:#fff
     style S3 fill:#111827,stroke:#10b981,stroke-width:2px,color:#fff
 ```
+
+> **Deterministic Containment vs. Out-of-Range Sensor Blocks:**  
+> - **Prohibited Policy Breach (`pause_on_violation === 1`):** Triggers immediate containment. The gateway transitions the agent status to `PAUSED`, opens an immutable incident record in the database, and prevents all further operations until formal recovery.  
+> - **Sensor-Range Violation (`INPUT_VALUES_OUT_OF_RANGE`):** Strictly halts execution with **zero tool side-effects**, but **does NOT auto-pause the agent** (`pauseOnViolation: false`). The agent remains `ACTIVE` so it can continue processing future nominal telemetry feeds without unnecessary operational outages.
 
 ---
 
@@ -122,7 +128,7 @@ flowchart TD
     C --> D{"Reviewer Role & Decision"}
     
     D -- "Reject with Written Reason" --> E["Atomic CAS: State -> REJECTED"]
-    E --> F["Action Terminated (Zero Execution unless reopened via backup re-review)"]
+    E --> F["Rejection is Terminal: Zero Execution (Cannot proceed unless reopened via backup re-review)"]
     
     D -- "Approve with Written Rationale" --> G["Atomic CAS: State -> APPROVED"]
     G --> H{"Post-Approval Revalidation"}
@@ -137,6 +143,9 @@ flowchart TD
     style H fill:#0f172a,stroke:#ef4444,stroke-width:2px,color:#fff
     style K fill:#111827,stroke:#10b981,stroke-width:2px,color:#fff
 ```
+
+> **Terminal Rejection & Reopening Invariant:**  
+> An approval rejection is terminal and irreversible through normal approval endpoints. To prevent unrecoverable operational lockouts while maintaining dual-custody rigor, AegisOS allows administrative supervisors to re-examine rejected requests via **Scenario Backup Re-Review** (`POST /api/backups/:id/reopen`). Reopening cryptographically verifies the SHA-256 snapshot hash and generates a fresh dual-custody approval record with immutable audit linkage.
 
 ---
 
@@ -160,21 +169,37 @@ flowchart TD
     I -- "Failure" --> J["Agent Remains PAUSED"]
     I -- "Success" --> K["Human Reviewer Approves Verified Patch"]
     
-    subgraph Gate ["Central Recovery Gate (R1 - R9 Checklist)"]
+    subgraph Gate ["Central Recovery Gate (R1 - R9 Checklist in resumeGate.ts)"]
         K --> L{"R1: Caller is Admin & R2: Written Reason?"}
-        L --> M{"R3: Agent & Policy Exist?"}
-        M --> N{"R4 - R5: Signature Diagnosis Recorded?"}
-        N --> O{"R6: Applied Correction Verified (PASS)?"}
-        O --> P{"R7: Separation of Duties & R8: Policy Hash Match?"}
+        L --> M{"R3: Agent & Policy Version Exist?"}
+        M --> N{"R4: Open Incidents Evaluated? (If None -> R9 Direct Resume)"}
+        N -- "Incidents Exist" --> O{"R5: Valid Catalog Signature Diagnosis?"}
+        O --> P{"R6: Applied Correction Verified (PASS / APPROVED / APPLIED)?"}
+        P --> Q{"R7: Separation of Duties & R8: Policy Hash Match?"}
     end
     
-    P -- "All Passed" --> Q["Agent Restored to ACTIVE Status"]
-    P -- "Any Check Fails" --> J
+    Q -- "All Passed" --> R["Agent Restored to ACTIVE Status"]
+    Q -- "Any Check Fails" --> J
 
     style Sandbox fill:#1e293b,stroke:#8b5cf6,stroke-width:2px,color:#fff
     style Gate fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#fff
-    style Q fill:#111827,stroke:#10b981,stroke-width:2px,color:#fff
+    style R fill:#111827,stroke:#10b981,stroke-width:2px,color:#fff
 ```
+
+#### Central Resume Gate: Real R1–R9 Invariants (from `backend/src/engine/resumeGate.ts`)
+Resumption of any paused agent is strictly centralized in `evaluateResumeEligibility()`:
+
+| Condition | Verification Rule | Code Implementation in `resumeGate.ts` |
+| :---: | :--- | :--- |
+| **R1** | **Administrator Role Required** | Caller must possess human administrator credentials (`actor.role === 'admin'`). |
+| **R2** | **Mandatory Written Justification** | Non-empty written reason must be supplied by the operator (`reason.trim().length > 0`). |
+| **R3** | **Agent & Policy Exist** | Target agent must exist in database (not terminated) and its configured `policy_version` must be active. |
+| **R4** | **Open Incident Assessment** | Queries open incidents (`status != 'RESOLVED'`). If 0 open incidents exist, condition **R9** applies. |
+| **R5** | **Catalog Diagnosis Recorded** | Every open incident must have a resolved catalog signature (cannot be null, `UNKNOWN`, or `AMBIGUOUS`). |
+| **R6** | **Verified & Applied Correction** | An associated correction must exist with `verdict === 'PASS'`, `approval_status === 'APPROVED'`, and `application_status === 'APPLIED'`. |
+| **R7** | **Separation of Duties** | Correction approver must be an authorized reviewer/admin who is neither the proposer nor the agent itself (`approver_id !== proposer_id` and `approver_id !== agentId`). |
+| **R8** | **Live Policy Hash Match** | Current SHA-256 hash of all policies must match `appliedCorr.policy_hash` captured during sandbox testing, guaranteeing policies did not drift. |
+| **R9** | **Manual Pause Fast Path** | For manual administrative pauses where zero open incidents exist, conditions **R1–R3** suffice for safe resumption. |
 
 ---
 
@@ -184,30 +209,30 @@ AegisOS is built across a modular backend and a high-fidelity tactical operator 
 
 ```
 codex/
-├── backend/                        # Node.js + Express + TypeScript Backend
+├── backend/                        # Node.js (>=22.5) + Express + TypeScript Backend
 │   ├── src/
 │   │   ├── engine/                 # Core Governance Logic
 │   │   │   ├── evaluator.ts        # Pure deterministic policy decision engine
-│   │   │   ├── gateway.ts          # Action routing & HMAC-SHA256 tool token issuing
-│   │   │   ├── inputQuality.ts     # Numerical sensor profiles, freshness & conflicts
+│   │   │   ├── gateway.ts          # Action routing, state transitions & HMAC tool tokens
+│   │   │   ├── inputQuality.ts     # Numerical sensor profiles, freshness & conflict checks
 │   │   │   ├── approval.ts         # Dual-custody workflow, CAS transitions, revalidation
 │   │   │   ├── diagnostics.ts      # Closed signature catalog & root-cause classifier
 │   │   │   ├── sandbox.ts          # S1–S6 structural, B1–B6 behavioural & Diff Guard
 │   │   │   ├── resumeGate.ts       # Central R1–R9 resumption checklist validator
 │   │   │   ├── incidentReport.ts   # 11-section formal accountability report generator
-│   │   │   └── audit.ts            # Tamper-evident SHA-256 hash-chained ledger
+│   │   │   ├── llmClient.ts        # Advisory LLM (env-configurable, offline fallback)
+│   │   │   ├── allocation.ts       # Deterministic task intake & role escalation
+│   │   │   └── dashboard.ts        # Governance telemetry & executive risk engine
 │   │   ├── tools/
-│   │   │   └── protectedTools.ts     # Protected simulated tool implementations
-│   │   │   └── protectedTools.ts     # Protected simulated tool implementations
-│   │   ├── routes/                 # Express REST API routes (actions, agents, backups, demo, etc.)
-│   │   ├── db/                     # SQLite schema & synthetic test fixtures
-│   │   └── types/                  # Shared domain types
+│   │   │   └── protectedTools.ts   # Protected simulated tools & HMAC-SHA256 validator
+│   │   ├── routes/                 # Express REST API routes (actions, agents, backups, etc.)
+│   │   └── db/                     # SQLite schema, connection & clean baseline seed
 │   └── tests/                      # 12 Vitest test suites (67 passing tests)
 │
 └── frontend/                       # React 19 + Vite + Tailwind Operator Console
     └── src/
         ├── components/
-            ├── Header.tsx          # Institutional header with demo banner & pulse
+            ├── Header.tsx          # Institutional header & global status indicator
             ├── Sidebar.tsx         # Section navigation with dynamic counters
             ├── OverviewView.tsx    # Governance status, KPI metrics & attention panel
             ├── AgentsView.tsx      # Agent fleet registry with slide-out drawer
@@ -219,7 +244,7 @@ codex/
             ├── AuditLogView.tsx    # Tamper-evident hash strip & event inspector
             ├── BackupsView.tsx     # Immutable scenario backups, re-review & reinstatement
             └── ScenarioLauncherModal.tsx # Interactive 1-click test scenario runner
-        ├── types.ts                # Frontend interfaces
+        ├── types.ts                # Frontend TypeScript interfaces
         └── App.tsx                 # Real-time state synchronization
 ```
 
@@ -231,9 +256,11 @@ AegisOS includes built-in synthetic test scenarios mirroring realistic high-cons
 
 | Scenario | Agent Category | Trigger Action | Evaluator Result | Governance Outcome |
 | :--- | :--- | :--- | :---: | :--- |
-| **Scenario 1** | Predictive Maintenance | Telemetry analysis with fresh sensor data | `ALLOW` | One-time HMAC token issued; simulated work order created in `tool-maintenance-db`. |
-| **Scenario 2** | Predictive Maintenance | Telemetry analysis with stale data (>3600s) | `REQUIRE_APPROVAL` | Ticket held in queue; zero tool mutation. Human reviewer inspects evidence and authorizes ticket with written rationale. |
-| **Scenario 3** | Cybersecurity Monitoring | Unauthorized `wipe_credentials` execution | `BLOCK` | Operation blocked before execution. Agent paused, containment incident logged, protected enclave untouched. |
+| **Scenario 1** | Predictive Maintenance | Telemetry analysis with fresh sensor data | `ALLOW` | One-time HMAC token issued; simulated work order created in `protectedTools.ts`. |
+| **Scenario 2A** | Predictive Maintenance | Missing mandatory telemetry fields | `BLOCK` | Request blocked before tool call (`MISSING_REQUIRED_INPUT_FIELDS`). Zero side-effects; agent remains active. |
+| **Scenario 2B** | Predictive Maintenance | Telemetry analysis with stale data (>300s) | `REQUIRE_APPROVAL` | Ticket held in queue (`STALE_TELEMETRY_HELD_FOR_HUMAN`); zero tool mutation. Human reviewer inspects evidence and authorizes ticket with written rationale. |
+| **Scenario 2C** | Predictive Maintenance | Out-of-bounds sensor values (vibration > 15) | `BLOCK` | Numerical check fails (`INPUT_VALUES_OUT_OF_RANGE`); zero tool mutation. Agent is **not** auto-paused (remains active for next cycle). |
+| **Scenario 3** | Cybersecurity Monitoring | Unauthorized `wipe_credentials` execution | `BLOCK` | Prohibited policy triggered. Agent paused, containment incident logged, protected enclave untouched. |
 | **Scenario 4** | Tactical Decision Support | Ingest contradictory UAV vs Radar reconnaissance | `REQUIRE_APPROVAL` | Conflicting sensor vectors detected; recommendation held for human intelligence analyst validation. |
 | **Scenario 5** | System Recovery & Repair | Patch proposal with Diff Guard validation | `RECOVERY FLOW` | Patch tested in sandbox (S1–S6, B1–B6). Central Resume Gate validates R1–R9 checklist before agent restoration. |
 | **Scenario 6** | Finance / Delegated Ops | Delegated refund ($4,000 <= $5,000 auto limit) | `ALLOW` | Autonomous threshold met; payment executed directly in synthetic protected ledger. |
@@ -267,11 +294,11 @@ npm run seed
 ```
 
 ### 3. Run Automated Tests
-Execute the full test suite comprising 67 automated tests across 12 test files:
+Execute the full test suite comprising 72 automated tests across 13 test files:
 ```bash
 npm test
 ```
-*All 67 tests validate deterministic policy decisions, sensor bounds, stale telemetry holds, prohibited containment, atomic CAS approvals, Diff Guard rejections, scenario backups, administrative reopening, and R1–R9 resume gates.*
+*All 72 tests validate deterministic policy decisions, sensor bounds, stale telemetry holds, prohibited containment, atomic CAS approvals, Diff Guard rejections, scenario backups, administrative reopening, and R1–R9 resume gates.*
 
 ### 4. Launch the Platform
 Start the backend API server and frontend operator console:
