@@ -35,7 +35,7 @@ The system intercepts proposed agent actions, executes a deterministic, multi-le
 | **Domain Checks** | Deterministic Input Quality Preconditions | Evaluates telemetry freshness, ranges, source IDs, conflict flags, and uncertainty rules |
 | **Tool Boundary** | HMAC Signed Execution Tokens | Protected simulated tools are private; calls without valid tokens signed by the gateway are rejected |
 | **Audit Log** | SHA-256 Hash Chaining | Append-only, tamper-evident chronological event log |
-| **Testing** | Vitest + Supertest | **55 unit, integration, and defence scenario tests** executed in ~5.2 seconds |
+| **Testing** | Vitest + Supertest | **57 unit, integration, and defence scenario tests** executed in ~2.8 seconds |
 | **Frontend** | React 19 + Vite + TypeScript | 8-tab operator console with persistent non-operational demo banner and scenario quick launcher |
 
 ---
