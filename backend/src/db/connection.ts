@@ -14,7 +14,7 @@ export function getDatabase(dbPath?: string, forceNew: boolean = false): Databas
 
   if (forceNew) {
     const db = new DatabaseSync(dbPath || ':memory:');
-    db.exec('PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
+    db.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;');
     return db;
   }
 
@@ -31,8 +31,22 @@ export function getDatabase(dbPath?: string, forceNew: boolean = false): Databas
   }
 
   dbInstance = new DatabaseSync(resolvedPath);
-  dbInstance.exec('PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
+  dbInstance.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;');
   return dbInstance;
+}
+
+export function logDatabaseErrorIfBusyOrLocked(err: any, context?: string): void {
+  if (!err) return;
+  const msg = err.message || String(err);
+  const code = err.code || '';
+  if (
+    msg.toLowerCase().includes('busy') ||
+    msg.toLowerCase().includes('locked') ||
+    code.includes('BUSY') ||
+    code.includes('LOCKED')
+  ) {
+    console.error(`[DATABASE BUSY/LOCKED ERROR] ${context ? `[${context}] ` : ''}${msg}`);
+  }
 }
 
 export function closeDatabase(): void {

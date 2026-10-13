@@ -4,6 +4,7 @@ import { getDatabase } from './connection.js';
 import { initializeSchema } from './schema.js';
 import { hashPassword } from '../auth/crypto.js';
 import { computeAuditEventHash } from '../engine/auditLedger.js';
+import { seedIntegration } from './seedIntegration.js';
 
 export function seedDatabase(db?: DatabaseSync): void {
   const targetDb = db || getDatabase();
@@ -65,6 +66,17 @@ export function seedDatabase(db?: DatabaseSync): void {
   insertOp.run('wipe_credentials', 'Prohibited destruction of authentication credentials', 1, 1, 0.50);
   insertOp.run('purge_security_logs', 'Prohibited deletion of boundary security event logs', 1, 1, 0.50);
   insertOp.run('issue_refund', 'Approve logistics spares requisition within authorized threshold', 1, 1, 0.05);
+  // Host-site operational catalog
+  insertOp.run('check_stock', 'Inspect warehouse spares inventory levels', 0, 0, 0.01);
+  insertOp.run('place_order', 'Issue logistics procurement purchase order', 1, 1, 0.10);
+  insertOp.run('issue_credit', 'Grant logistics vendor account credit voucher', 1, 1, 0.05);
+  insertOp.run('read_asset_status', 'Read asset maintenance telemetry and readiness', 0, 0, 0.01);
+  insertOp.run('schedule_maintenance', 'Schedule depot repair and overhaul maintenance window', 1, 0, 0.04);
+  insertOp.run('request_spares', 'Request spares requisition from procurement', 1, 0, 0.02);
+  insertOp.run('read_logs', 'Inspect host system diagnostic and security event logs', 0, 0, 0.01);
+  insertOp.run('read_record', 'Retrieve compliance record dossier', 0, 0, 0.01);
+  insertOp.run('archive_record', 'Archive compliance record dossier', 1, 0, 0.02);
+  insertOp.run('delete_record', 'Purge non-retained compliance record dossier', 1, 1, 0.08);
 
   // 3. Seed Task Types
   const insertTaskType = targetDb.prepare(`
@@ -207,10 +219,10 @@ export function seedDatabase(db?: DatabaseSync): void {
     INSERT INTO policies (id, version, name, applicable_agent_id, operation, resource_pattern, decision, severity, pause_on_violation, open_incident, max_auto_amount, daily_cap, window_minutes, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
-  insertPolicy.run('POL-DOC-READ', 'v1.0', 'Allow Document Reads in Scope', 'doc-agent-01', 'read_file', 'synthetic://documents/*', 'allow', 'low', 0, 0, null, null, null, now);
+  insertPolicy.run('POL-DOC-READ', 'v1.0', 'Allow Document Reads in Scope', null, 'read_file', 'synthetic://documents/*', 'allow', 'low', 0, 0, null, null, null, now);
   insertPolicy.run('POL-DOC-WRITE', 'v1.0', 'Allow Summary Creation', 'doc-agent-01', 'write_summary', 'synthetic://reports/*', 'allow', 'low', 0, 0, null, null, null, now);
   insertPolicy.run('POL-DOC-ARCHIVE', 'v1.0', 'Allow Document Archival', 'doc-agent-01', 'archive_file', 'synthetic://archive/*', 'allow', 'low', 0, 0, null, null, null, now);
-  insertPolicy.run('POL-DOC-EXPORT', 'v1.0', 'Require Approval for External Export', 'doc-agent-01', 'export_dataset', 'synthetic://documents/*', 'require_approval', 'medium', 0, 0, null, null, null, now);
+  insertPolicy.run('POL-DOC-EXPORT', 'v1.0', 'Require Approval for External Export', null, 'export_dataset', 'synthetic://documents/*', 'require_approval', 'medium', 0, 0, null, null, null, now);
   insertPolicy.run('POL-DOC-DELETE', 'v1.0', 'Strictly Prohibit File Deletion', null, 'delete_file', '*', 'block', 'high', 1, 1, null, null, null, now);
   
   // Defence Domain Policies
@@ -227,6 +239,19 @@ export function seedDatabase(db?: DatabaseSync): void {
 
   // Logistics Spares Requisition Authority Policy (P5b/P5c)
   insertPolicy.run('POL-REFUND-01', 'v1.0', 'Logistics Spares Requisition Authority (Auto-approve up to 5,000 per requisition and 8,000 per 24h; above that needs commander approval)', 'agent-finance-refund-04', 'issue_refund', 'synthetic://orders/*', 'allow', 'medium', 0, 0, 5000.0, 8000.0, 1440, now);
+
+  // Host-Site Policies (Procurement, Maintenance, Cyber, Records)
+  insertPolicy.run('POL-PROC-01', 'v1.0', 'Autonomous Parts Requisition Policy (Auto-approve up to 5,000; above requires officer approval)', null, 'place_order', '*', 'allow', 'medium', 0, 0, 5000.0, 8000.0, 1440, now);
+  insertPolicy.run('POL-PROC-CHECK', 'v1.0', 'Allow Inventory Stock Checks', null, 'check_stock', '*', 'allow', 'low', 0, 0, null, null, null, now);
+  insertPolicy.run('POL-PROC-CREDIT', 'v1.0', 'Vendor Account Credit Policy (Max 1,000)', null, 'issue_credit', '*', 'allow', 'medium', 0, 0, 1000.0, null, null, now);
+  insertPolicy.run('POL-MAINT-STATUS', 'v1.0', 'Allow Asset Telemetry Reading', null, 'read_asset_status', '*', 'allow', 'low', 0, 0, null, null, null, now);
+  insertPolicy.run('POL-MAINT-SCHED', 'v1.0', 'Allow Scheduled Maintenance Windows', null, 'schedule_maintenance', '*', 'allow', 'low', 0, 0, null, null, null, now);
+  insertPolicy.run('POL-MAINT-SPARES', 'v1.0', 'Allow Spare Part Handoff Requests', null, 'request_spares', '*', 'allow', 'low', 0, 0, null, null, null, now);
+  insertPolicy.run('POL-CYBER-LOGS', 'v1.0', 'Allow Security Log Ingestion', null, 'read_logs', '*', 'allow', 'low', 0, 0, null, null, null, now);
+  insertPolicy.run('POL-CYBER-ISOLATE-HOST', 'v1.0', 'Require Human Officer Approval for Host Network Isolation', null, 'isolate_host', '*', 'require_approval', 'high', 0, 0, null, null, null, now);
+  insertPolicy.run('POL-REC-READ', 'v1.0', 'Allow Record Reading', null, 'read_record', '*', 'allow', 'low', 0, 0, null, null, null, now);
+  insertPolicy.run('POL-REC-ARCHIVE', 'v1.0', 'Allow Record Archival', null, 'archive_record', '*', 'allow', 'low', 0, 0, null, null, null, now);
+  insertPolicy.run('POL-REC-DELETE', 'v1.0', 'Require Officer Review for Record Deletions', null, 'delete_record', '*', 'require_approval', 'high', 0, 0, null, null, null, now);
 
   // 5. Seed Agents
   const faultyWorkflow = [
@@ -276,6 +301,12 @@ export function seedDatabase(db?: DatabaseSync): void {
     now
   );
 
+  const exporterWorkflow = [
+    { step_id: 'step_1', operation: 'read_file', resource: 'synthetic://documents/defense_intel_brief_2026.txt', params: {} },
+    { step_id: 'step_2', operation: 'export_dataset', resource: 'synthetic://documents/defense_intel_brief_2026.txt', params: {} },
+    { step_id: 'step_3', operation: 'delete_file', resource: 'synthetic://documents/defense_intel_brief_2026.txt', params: {} }
+  ];
+
   insertAgent.run(
     'data-exporter-99',
     'Bulk Intelligence Exporter',
@@ -291,7 +322,7 @@ export function seedDatabase(db?: DatabaseSync): void {
     JSON.stringify(['synthetic://documents/*']),
     'restricted',
     'v1.0',
-    JSON.stringify([]),
+    JSON.stringify(exporterWorkflow),
     '{}',
     '{}',
     1,
@@ -456,6 +487,157 @@ export function seedDatabase(db?: DatabaseSync): void {
     now,
     now
   );
+
+  // Host-Site Agent 1: Autonomous Procurement Agent
+  insertAgent.run(
+    'procurement-agent-01',
+    'Autonomous Procurement Agent',
+    'procurement',
+    'agnt_live_procurement_01',
+    'usr-reviewer',
+    'Defence Logistics Operations',
+    'Defence Logistics Operations',
+    'You are the Autonomous Procurement Agent for the Defence Logistics Operations Center. Process parts requisitions within approved financial thresholds.',
+    'medium',
+    'MODERATE',
+    JSON.stringify(['check_stock', 'place_order', 'issue_credit']),
+    JSON.stringify(['*']),
+    'active',
+    'v1.0.0',
+    JSON.stringify([]),
+    '{}',
+    '{}',
+    1,
+    0.05,
+    now,
+    now
+  );
+
+  // Host-Site Agent 2: Maintenance Planner
+  insertAgent.run(
+    'maint-planner-01',
+    'Predictive Maintenance Planner',
+    'maintenance',
+    'agnt_live_maint_planner_01',
+    'usr-reviewer',
+    'Fleet Readiness & Propulsion',
+    'Fleet Readiness & Propulsion',
+    'You are the Maintenance Planner. Monitor asset telemetry, schedule routine depot maintenance, and request replacement spares.',
+    'medium',
+    'MODERATE',
+    JSON.stringify(['read_asset_status', 'schedule_maintenance', 'request_spares']),
+    JSON.stringify(['*']),
+    'active',
+    'v1.0.0',
+    JSON.stringify([]),
+    '{}',
+    '{}',
+    1,
+    0.04,
+    now,
+    now
+  );
+
+  // Host-Site Agent 3: Cyber Security Monitoring Agent
+  insertAgent.run(
+    'cyber-monitor-01',
+    'Cyber Security Monitoring Agent',
+    'cyber',
+    'agnt_live_cyber_monitor_01',
+    'usr-admin',
+    'Cyber Defense Operations Center',
+    'Cyber Defense Operations Center',
+    'You are the Cyber Security Monitoring Agent. Detect anomalies in host infrastructure and quarantine compromised assets with human approval.',
+    'high',
+    'HIGH',
+    JSON.stringify(['read_logs', 'isolate_host', 'wipe_credentials']),
+    JSON.stringify(['*']),
+    'active',
+    'v1.0.0',
+    JSON.stringify([]),
+    '{}',
+    '{}',
+    1,
+    0.10,
+    now,
+    now
+  );
+
+  // Host-Site Agent 4: Records Agent
+  insertAgent.run(
+    'records-agent-01',
+    'Compliance & Records Archival Agent',
+    'records',
+    'agnt_live_records_01',
+    'usr-admin',
+    'System Operations',
+    'System Operations',
+    'You are the Compliance Records Agent. Manage historical logistics dossiers adhering strictly to statutory retention laws.',
+    'medium',
+    'MODERATE',
+    JSON.stringify(['read_record', 'archive_record', 'delete_record']),
+    JSON.stringify(['*']),
+    'active',
+    'v1.0.0',
+    JSON.stringify([]),
+    '{}',
+    '{}',
+    1,
+    0.02,
+    now,
+    now
+  );
+
+  // Seed / Backfill the existing held request req-1791842831714-f38b7ac6 so it is immediately visible in AegisOS Console
+  const existingHeldReq = targetDb.prepare('SELECT 1 FROM action_requests WHERE id = ?').get('req-1791842831714-f38b7ac6');
+  if (!existingHeldReq) {
+    const heldReqParams = JSON.stringify({
+      part_id: 'PRT-ENG-09',
+      qty: 1,
+      amount: 6200
+    });
+
+    targetDb.prepare(`
+      INSERT INTO action_requests (
+        id, agent_id, agent_category, tool, operation, resource, parameters,
+        task_type, handler, handler_reason, resource_sensitivity, correlation_id,
+        gate_decision, gate_reason_code, policy_id, policy_version, explanation,
+        received_at, gated_at, approval_requested_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      'req-1791842831714-f38b7ac6',
+      'procurement-agent-01',
+      'procurement',
+      'place_order',
+      'place_order',
+      'default',
+      heldReqParams,
+      'procurement_order',
+      'human',
+      'THRESHOLD_EXCEEDED_REQUIRES_APPROVAL',
+      'unclassified',
+      'wrk-syn-828986-bf6f',
+      'REQUIRE_APPROVAL',
+      'THRESHOLD_EXCEEDED_REQUIRES_APPROVAL',
+      'POL-PROC-01',
+      'v1.0',
+      'Order amount 6200 exceeds the autonomous threshold of 5000. Escalated to Logistics Officer.',
+      1791842831714,
+      1791842831714,
+      1791842831714
+    );
+
+    targetDb.prepare(`
+      INSERT INTO approvals (id, request_id, status, requested_at)
+      VALUES (?, ?, 'PENDING', ?)
+    `).run('appr-req-1791842831714-f38b7ac6', 'req-1791842831714-f38b7ac6', 1791842831714);
+
+    targetDb.prepare(`
+      INSERT INTO executions (id, request_id, status, non_execution_reason, created_at)
+      VALUES (?, ?, 'NOT_EXECUTED', 'APPROVAL_PENDING', ?)
+    `).run('exec-req-1791842831714-f38b7ac6', 'req-1791842831714-f38b7ac6', 1791842831714);
+  }
 
   // 6. Seed Baseline Incident inc-demo-001 (Workstream C & Demo)
   targetDb.prepare(`
@@ -715,6 +897,9 @@ export function seedDatabase(db?: DatabaseSync): void {
     now - 3600000,
     'REOPENED'
   );
+
+  // Seed integration agents and policies
+  seedIntegration(targetDb);
 }
 
 if (process.argv[1] && process.argv[1].endsWith('seed.ts')) {

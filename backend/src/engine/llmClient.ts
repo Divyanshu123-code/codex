@@ -188,7 +188,7 @@ export async function executeLLMCall(
 
   if (!outputText) {
     source = 'deterministic_fallback';
-    outputText = generateDeterministicFallback(options);
+    outputText = generateDeterministicFallback(options, targetDb);
   }
 
   const responseHash = crypto.createHash('sha256').update(outputText).digest('hex');
@@ -230,22 +230,66 @@ export async function executeLLMCall(
   };
 }
 
-function generateDeterministicFallback(options: LLMCallOptions): string {
+function generateDeterministicFallback(options: LLMCallOptions, db?: DatabaseSync): string {
   switch (options.purpose) {
-    case 'L1_PATCH_PROPOSAL':
+    case 'L1_PATCH_PROPOSAL': {
+      let allowedOp = 'archive_file';
+      let targetResource = 'synthetic://archive/cleared_briefs.txt';
+      if (options.agentId && db) {
+        try {
+          const aRow = db.prepare('SELECT allowed_operations, allowed_resources FROM agents WHERE id = ?').get(options.agentId) as any;
+          if (aRow) {
+            const aOps: string[] = JSON.parse(aRow.allowed_operations || '[]');
+            const aRes: string[] = JSON.parse(aRow.allowed_resources || '[]');
+            if (aOps.includes('archive_file') && aRes.some((r: string) => r.includes('archive'))) {
+              allowedOp = 'archive_file';
+              targetResource = 'synthetic://archive/cleared_briefs.txt';
+            } else if (aOps.includes('read_file')) {
+              allowedOp = 'read_file';
+              targetResource = 'synthetic://documents/defense_intel_brief_2026.txt';
+            } else if (aOps.includes('read_telemetry')) {
+              allowedOp = 'read_telemetry';
+              targetResource = 'synthetic://telemetry/sample_reading.json';
+            } else if (aOps.includes('read_security_logs')) {
+              allowedOp = 'read_security_logs';
+              targetResource = 'synthetic://network-logs/sample_event.json';
+            } else if (aOps.includes('read_recon_report')) {
+              allowedOp = 'read_recon_report';
+              targetResource = 'synthetic://recon/sample_report.json';
+            } else {
+              allowedOp = aOps[0] || 'read_file';
+              targetResource = (aRes[0] || 'synthetic://documents/*').replace(/\*$/, 'repaired_intel.txt');
+            }
+          }
+        } catch {
+          // Non-blocking fallback
+        }
+      }
+
       return JSON.stringify({
         summary: 'Constrained workflow correction replacing unauthorized step',
         patch: {
           action: 'replace_step_operation',
           target_step_id: 'step_3',
-          new_operation: 'archive_file',
-          new_resource: 'synthetic://archive/cleared_briefs.txt',
-          description: 'Replaces prohibited operation with policy-compliant archival'
+          new_operation: allowedOp,
+          new_resource: targetResource,
+          description: `Replace prohibited step operation with policy-compliant ${allowedOp}`
         },
-        rationale: 'Replaces prohibited deletion or destructive operation with policy-compliant archival in accordance with closed signature catalog.'
+        rationale: 'Replaces prohibited deletion or destructive operation with policy-compliant alternative in accordance with closed signature catalog.'
       });
+    }
 
     case 'L2_PLAIN_LANGUAGE_EXPLANATION': {
+      // 0. Incident / Correction Repair Rationale
+      if (
+        options.prompt.includes('deterministic correction') ||
+        options.prompt.includes('safe:') ||
+        options.prompt.includes('patch') ||
+        (options.incidentId && !options.requestDetails)
+      ) {
+        return 'Institutional Repair Rationale: Replaces prohibited workflow operation with policy-compliant alternative in accordance with closed diagnostic signature catalog. The proposed patch confines agent operations strictly within permitted capability and resource perimeters, preserving least-privilege invariants with zero permission widening in compliance with JSP 936 standards.';
+      }
+
       const rd = options.requestDetails || {};
       const params = typeof rd.parameters === 'string'
         ? (() => { try { return JSON.parse(rd.parameters); } catch { return {}; } })()
@@ -336,6 +380,10 @@ function generateDeterministicFallback(options: LLMCallOptions): string {
       // 8. Dynamic fallback from rawExplanation
       if (rawExplanation) {
         return `Governance Interlock Decision: The requested operation '${op}' on resource '${resource}' was held under policy ${policy}. Pre-execution finding: ${rawExplanation}. Supervisory authorization is required before protected execution can proceed.`;
+      }
+
+      if (options.prompt.includes('correction') || options.prompt.includes('incident') || options.incidentId) {
+        return 'Institutional Repair Rationale: Replaces prohibited workflow operation with policy-compliant alternative in accordance with closed diagnostic signature catalog. The proposed patch confines agent operations strictly within permitted capability and resource perimeters, preserving least-privilege invariants with zero permission widening in compliance with JSP 936 standards.';
       }
 
       return 'The requested operation requires human dual-custody review. The requested monetary amount ($6,000.00) exceeds the configured autonomous threshold limit ($5,000.00) established by policy POL-REFUND-01. Protected execution has been withheld until an authorized administrator verifies order details and provides written justification.';

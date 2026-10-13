@@ -12,6 +12,11 @@ import {
   executeProtectedTool,
   generateExecutionToken
 } from '../tools/protectedTools.js';
+import {
+  generateGovernanceToken,
+  computeParamsHash,
+  TokenClaims
+} from './governanceTokens.js';
 
 export interface ApprovalDecisionResult {
   approvalId: string;
@@ -46,11 +51,15 @@ export function decideApproval(
   }
 
   // 3. Fetch approval record
-  const approvalRow = targetDb.prepare('SELECT * FROM approvals WHERE id = ?').get(approvalId) as any;
+  let approvalRow = targetDb.prepare('SELECT * FROM approvals WHERE id = ?').get(approvalId) as any;
+  if (!approvalRow) {
+    approvalRow = targetDb.prepare('SELECT * FROM approvals WHERE request_id = ?').get(approvalId) as any;
+  }
   if (!approvalRow) {
     throw new Error(`Approval record ${approvalId} not found.`);
   }
 
+  const actualApprovalId = approvalRow.id;
   const requestId = approvalRow.request_id;
 
   // 4. Fetch Action Request
@@ -149,7 +158,7 @@ export function decideApproval(
     UPDATE approvals
     SET status = ?, approver_id = ?, approver_role = ?, reason = ?, decided_at = ?
     WHERE id = ? AND (status = 'PENDING' OR status = 'PENDING_SECOND_APPROVAL')
-  `).run(decision, approver.id, approver.role, reason, now, approvalId);
+  `).run(decision, approver.id, approver.role, reason, now, actualApprovalId);
 
   if (approvalUpdate.changes === 0) {
     throw new Error(`APPROVAL_ALREADY_DECIDED: Request ${requestId} has already been processed.`);
@@ -314,7 +323,7 @@ export function decideApproval(
     }, targetDb);
 
     return {
-      approvalId,
+      approvalId: actualApprovalId,
       requestId,
       approvalStatus: 'REJECTED',
       executionStatus: 'NOT_EXECUTED',
@@ -434,22 +443,84 @@ export function decideApproval(
     safeDetails: { approverId: approver.id }
   }, targetDb);
 
-  // 10. Execute Protected Tool with Signed Token
-  const token = generateExecutionToken(requestId, requestRow.operation, requestRow.resource, getGatewaySecret());
-  const toolResult = executeProtectedTool(
-    token,
-    requestId,
-    requestRow.operation,
-    requestRow.resource,
-    JSON.parse(requestRow.parameters),
-    getGatewaySecret()
-  );
+  // 10. Generate single-use governance token for host runtime execution
+  const nonce = `nonce-${crypto.randomBytes(8).toString('hex')}`;
+  const expiresAt = now + 300000;
+  const claims: TokenClaims = {
+    sub: requestRow.agent_id,
+    req: requestId,
+    op: requestRow.operation,
+    res: requestRow.resource || 'default',
+    ph: computeParamsHash(parsedParams),
+    nonce,
+    iat: now,
+    exp: expiresAt,
+    iss: 'AegisOS'
+  };
+  const govToken = generateGovernanceToken(claims, getGatewaySecret());
 
-  targetDb.prepare(`
-    UPDATE executions
-    SET status = 'SUCCEEDED', duration_ms = ?, result_reference = ?, executed_at = ?
-    WHERE request_id = ?
-  `).run(toolResult.durationMs, JSON.stringify(toolResult.result), Date.now(), requestId);
+  try {
+    targetDb.prepare(`
+      INSERT OR REPLACE INTO governance_tokens (request_id, token, nonce, expires_at, created_at)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(requestId, govToken, nonce, expiresAt, now);
+  } catch {
+    // Continue even if table migration pending
+  }
+
+  const INTERNAL_TOOLS = new Set([
+    'read_file', 'write_summary', 'archive_file', 'delete_file', 'export_dataset',
+    'read_telemetry', 'create_maintenance_ticket', 'read_security_logs', 'isolate_host',
+    'block_ip', 'read_recon_report', 'propose_tactical_recommendation', 'issue_refund'
+  ]);
+  const isHostSiteAgent = requestRow.agent_id.startsWith('procurement-') ||
+    requestRow.agent_id.startsWith('maint-') ||
+    requestRow.agent_id.startsWith('cyber-') ||
+    requestRow.agent_id.startsWith('records-');
+
+  let toolResult: any = null;
+
+  if (INTERNAL_TOOLS.has(requestRow.operation) && !isHostSiteAgent) {
+    const token = generateExecutionToken(requestId, requestRow.operation, requestRow.resource, getGatewaySecret());
+    toolResult = executeProtectedTool(
+      token,
+      requestId,
+      requestRow.operation,
+      requestRow.resource,
+      parsedParams,
+      getGatewaySecret()
+    );
+
+    targetDb.prepare(`
+      UPDATE executions
+      SET status = 'SUCCEEDED', duration_ms = ?, result_reference = ?, executed_at = ?
+      WHERE request_id = ?
+    `).run(toolResult.durationMs, JSON.stringify(toolResult.result), Date.now(), requestId);
+
+    writeAuditEvent({
+      eventType: 'EXECUTION_SUCCEEDED',
+      actorType: 'system',
+      actorId: 'approval-executor',
+      agentId: requestRow.agent_id,
+      agentOwner: agentRow ? agentRow.owner_user_id : null,
+      policyId: requestRow.policy_id,
+      policyVersion: requestRow.policy_version,
+      resourceReference: requestRow.resource,
+      decision: 'ALLOW',
+      outcome: 'SUCCESS',
+      requestId,
+      incidentId: null,
+      correctionId: null,
+      safeDetails: { resultSummary: 'Approved action executed cleanly' }
+    }, targetDb);
+  } else {
+    // External / host-site operation: Execution will be performed by the host site runner upon status poll
+    targetDb.prepare(`
+      UPDATE executions
+      SET status = 'NOT_EXECUTED', non_execution_reason = 'AWAITING_RUNNER_DISPATCH', executed_at = ?
+      WHERE request_id = ?
+    `).run(now, requestId);
+  }
 
   try {
     const decisionDetails = JSON.stringify({
@@ -461,36 +532,19 @@ export function decideApproval(
     });
     targetDb.prepare(`
       UPDATE scenario_backups
-      SET human_decision = ?, execution_status = 'SUCCEEDED',
+      SET human_decision = ?, execution_status = ?,
           correction_status = CASE WHEN correction_status = 'REOPENED' THEN 'CORRECTED' ELSE correction_status END
       WHERE request_id = ?
-    `).run(decisionDetails, requestId);
+    `).run(decisionDetails, toolResult ? 'SUCCEEDED' : 'NOT_EXECUTED', requestId);
   } catch {
     // Ignore if table missing or row absent
   }
 
-  writeAuditEvent({
-    eventType: 'EXECUTION_SUCCEEDED',
-    actorType: 'system',
-    actorId: 'approval-executor',
-    agentId: requestRow.agent_id,
-    agentOwner: agentRow ? agentRow.owner_user_id : null,
-    policyId: requestRow.policy_id,
-    policyVersion: requestRow.policy_version,
-    resourceReference: requestRow.resource,
-    decision: 'ALLOW',
-    outcome: 'SUCCESS',
-    requestId,
-    incidentId: null,
-    correctionId: null,
-    safeDetails: { resultSummary: 'Approved action executed cleanly' }
-  }, targetDb);
-
   return {
-    approvalId,
+    approvalId: actualApprovalId,
     requestId,
     approvalStatus: 'APPROVED',
-    executionStatus: 'SUCCEEDED',
-    result: toolResult.result
+    executionStatus: toolResult ? 'SUCCEEDED' : 'NOT_EXECUTED',
+    result: toolResult ? toolResult.result : { token: govToken, nonce, expiresAt }
   };
 }

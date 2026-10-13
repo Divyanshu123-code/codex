@@ -100,6 +100,37 @@ export interface AgentBackup {
 }
 
 
+export interface AgentTelemetry {
+  agentId: string;
+  hostStatus?: string;
+  hostStatusReason?: string;
+  configVersion?: string;
+  lastControlPoll?: number | null;
+  currentWorkItem?: {
+    id: string;
+    type: string;
+    priority: string;
+    status: string;
+  } | null;
+  pendingQueueSize: number;
+  lastAction?: {
+    id: string;
+    agent_id?: string;
+    tool: string;
+    params: any;
+    aegis_request_id?: string;
+    decision: string;
+    outcome: string;
+    ts: number;
+  } | null;
+  cumulativeSpendToday?: number;
+  totalOrdersCount?: number;
+  activeMaintenanceCount?: number;
+  hostsCount?: number;
+  recordsCount?: number;
+  connected?: boolean;
+}
+
 export interface Agent {
   id: string;
   name: string;
@@ -122,8 +153,15 @@ export interface Agent {
     operation: string;
     resource: string;
     params?: Record<string, any>;
-  }>;
+  }> | {
+    system_prompt?: string;
+    tools?: string[];
+    step_budget?: number;
+    [key: string]: any;
+  };
   demo_data_only?: number | boolean;
+  is_host_fleet?: boolean;
+  telemetry?: AgentTelemetry | null;
 }
 
 export interface Policy {
@@ -171,12 +209,14 @@ export interface Incident {
   policy_id: string;
   action_attempted: string;
   severity: 'low' | 'medium' | 'high' | 'critical';
-  status: 'OPEN' | 'CONTAINED' | 'RESOLVED' | 'CLOSED';
+  status: 'OPEN' | 'DIAGNOSED' | 'CONTAINED' | 'RESOLVED' | 'CLOSED';
   containment_action: string;
   occurred_at: number;
   resolved_at?: number | null;
   agent_category?: string;
   evidence_checks?: string | Record<string, any>;
+  signature_id?: string | null;
+  diagnostic_result?: string | Record<string, any> | null;
 }
 
 export interface Correction {

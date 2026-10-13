@@ -687,4 +687,56 @@ describe('AegisOS Policy Threshold, Backup & Wrong Human Call Reinstatement (Cla
     expect(dashRes.body.humanIntervention.humanDecisionsOverturned).toBeGreaterThanOrEqual(1);
     expect(dashRes.body.humanIntervention.reopenRequests).toBeGreaterThanOrEqual(1);
   });
+
+  it('14. Reopening non-finance agent request (e.g. agent-cyber-monitor-02) does not fail with synthetic://orders mismatch', async () => {
+    // 1. Submit action requiring human approval for cyber monitor agent
+    const res = await request(app)
+      .post('/api/actions/route')
+      .send({
+        agentId: 'agent-cyber-monitor-02',
+        tool: 'enclave_isolator',
+        operation: 'isolate_host',
+        resource: 'synthetic://enclaves/host-alpha-9',
+        parameters: {
+          event_id: 'evt-iso-01',
+          timestamp: Date.now() - 5000,
+          source_ip: '192.168.1.50',
+          threat_signature: 'SIG-ANOMALY-01',
+          threat_confidence: 0.95
+        }
+      });
+    expect(res.body.gateDecision).toBe('REQUIRE_APPROVAL');
+
+    const approvalId = `appr-${res.body.requestId}`;
+
+    // 2. Reject it as reviewer
+    const rejectRes = await request(app)
+      .post(`/api/approvals/${approvalId}/decision`)
+      .send({
+        decision: 'REJECTED',
+        approverId: 'usr-reviewer',
+        approverRole: 'reviewer',
+        reason: 'Hold off pending manual network packet capture analysis'
+      });
+    expect(rejectRes.status).toBe(200);
+
+    // 3. Find scenario backup
+    const backupsRes = await request(app).get('/api/backups?agentId=agent-cyber-monitor-02');
+    const backupItem = backupsRes.body.find((b: any) => b.request_id === res.body.requestId);
+    expect(backupItem).toBeDefined();
+
+    // 4. Admin reopens it
+    const reopenRes = await request(app)
+      .post(`/api/backups/${backupItem.id}/reopen`)
+      .send({
+        reason: 'Packet capture confirmed active exfiltration, re-evaluating for urgent host quarantine',
+        actor: { id: 'usr-admin', role: 'admin' }
+      });
+
+    // Must NOT fail with POLICY_REVALIDATION_FAILED: Target resource 'synthetic://orders/default' does not match
+    expect(reopenRes.status).toBe(200);
+    expect(reopenRes.body.success).toBe(true);
+    expect(reopenRes.body.status).toBe('REOPENED');
+  });
 });
+

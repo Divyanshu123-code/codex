@@ -38,7 +38,7 @@ let hasWarnedDevGatewaySecret = false;
  * with an explicit warning when run outside demo mode.
  */
 export function getGatewaySecret(): string {
-  const envSecret = process.env.AGENT_GATEWAY_SECRET;
+  const envSecret = process.env.AEGIS_GATEWAY_SECRET || process.env.AGENT_GATEWAY_SECRET;
   if (envSecret && envSecret.trim().length > 0) {
     return envSecret;
   }

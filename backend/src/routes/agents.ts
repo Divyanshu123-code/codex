@@ -1,5 +1,7 @@
 import { Router, Request, Response } from 'express';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
 import { z } from 'zod';
 import { getDatabase } from '../db/connection.js';
 import { transitionAgentStatus, writeAuditEvent } from '../engine/gateway.js';
@@ -8,19 +10,153 @@ import { requireAdmin } from '../auth/middleware.js';
 
 export const agentsRouter = Router();
 
+const HOST_SITE_AGENT_IDS = [
+  'procurement-agent-01',
+  'maint-planner-01',
+  'cyber-monitor-01',
+  'records-agent-01'
+];
+
+export async function getHostSiteTelemetry(): Promise<Record<string, any>> {
+  const telemetry: Record<string, any> = {};
+
+  // 1. Try live HTTP endpoint on host-site port 4100
+  try {
+    const res = await fetch('http://127.0.0.1:4100/api/agents', { signal: AbortSignal.timeout(800) });
+    if (res.ok) {
+      const data = await res.json() as any;
+      if (Array.isArray(data.agents)) {
+        for (const a of data.agents) {
+          telemetry[a.agentId] = {
+            agentId: a.agentId,
+            hostStatus: a.status,
+            hostStatusReason: a.statusReason,
+            configVersion: a.configVersion,
+            lastControlPoll: a.lastControlPoll,
+            currentWorkItem: a.currentWorkItem,
+            pendingQueueSize: a.pendingQueueSize,
+            lastAction: a.lastAction,
+            connected: true
+          };
+        }
+      }
+    }
+  } catch {
+    // Fallback to direct SQLite read
+  }
+
+  // 2. Direct SQLite fallback from host-site database
+  try {
+    const hostDbPath = '/Users/divanshu/demo website codex/host-site/backend/data/host-site.sqlite';
+    if (fs.existsSync(hostDbPath)) {
+      const hostDb = new DatabaseSync(hostDbPath);
+      const states = hostDb.prepare('SELECT * FROM agent_state').all() as any[];
+      for (const s of states) {
+        if (!telemetry[s.agent_id]) {
+          const pendingCount = (hostDb.prepare("SELECT COUNT(*) as c FROM work_items WHERE assigned_agent = ? AND status = 'PENDING'").get(s.agent_id) as any)?.c || 0;
+          const currentItem = hostDb.prepare("SELECT id, type, priority, status FROM work_items WHERE assigned_agent = ? AND status IN ('IN_PROGRESS', 'PENDING_APPROVAL') ORDER BY updated_at DESC LIMIT 1").get(s.agent_id) as any;
+          const lastAct = hostDb.prepare("SELECT * FROM agent_actions WHERE agent_id = ? ORDER BY ts DESC LIMIT 1").get(s.agent_id) as any;
+
+          telemetry[s.agent_id] = {
+            agentId: s.agent_id,
+            hostStatus: s.status,
+            hostStatusReason: s.reason,
+            configVersion: s.config_version,
+            lastControlPoll: s.last_control_poll,
+            pendingQueueSize: pendingCount,
+            currentWorkItem: currentItem || null,
+            lastAction: lastAct || null,
+            connected: true
+          };
+        }
+      }
+
+      // Compute domain metrics
+      const totalOrdersAmount = (hostDb.prepare("SELECT SUM(amount) as s FROM orders").get() as any)?.s || 0;
+      const totalOrdersCount = (hostDb.prepare("SELECT COUNT(*) as c FROM orders").get() as any)?.c || 0;
+      const activeMaintenanceCount = (hostDb.prepare("SELECT COUNT(*) as c FROM maintenance_jobs").get() as any)?.c || 0;
+      const hostsCount = (hostDb.prepare("SELECT COUNT(*) as c FROM hosts").get() as any)?.c || 0;
+      const recordsCount = (hostDb.prepare("SELECT COUNT(*) as c FROM records").get() as any)?.c || 0;
+
+      if (telemetry['procurement-agent-01']) {
+        telemetry['procurement-agent-01'].cumulativeSpendToday = totalOrdersAmount;
+        telemetry['procurement-agent-01'].totalOrdersCount = totalOrdersCount;
+      }
+      if (telemetry['maint-planner-01']) {
+        telemetry['maint-planner-01'].activeMaintenanceCount = activeMaintenanceCount;
+      }
+      if (telemetry['cyber-monitor-01']) {
+        telemetry['cyber-monitor-01'].hostsCount = hostsCount;
+      }
+      if (telemetry['records-agent-01']) {
+        telemetry['records-agent-01'].recordsCount = recordsCount;
+      }
+    }
+  } catch {
+    // Ignore fallback errors
+  }
+
+  return telemetry;
+}
+
 // GET /api/agents
-agentsRouter.get('/', (req: Request, res: Response) => {
+agentsRouter.get('/', async (req: Request, res: Response) => {
   try {
     const db = getDatabase();
-    const rows = db.prepare('SELECT * FROM agents ORDER BY created_at DESC').all();
-    const agents = rows.map((r: any) => ({
-      ...r,
-      allowed_operations: JSON.parse(r.allowed_operations),
-      allowed_resources: JSON.parse(r.allowed_resources),
-      workflow_config: JSON.parse(r.workflow_config),
-      input_requirements: r.input_requirements ? JSON.parse(r.input_requirements) : {},
-      uncertainty_rule: r.uncertainty_rule ? JSON.parse(r.uncertainty_rule) : {}
-    }));
+    const fleetParam = (req.query.fleet as string) || '';
+
+    let rows: any[];
+    if (fleetParam === 'live' || fleetParam === 'website') {
+      rows = db.prepare(`
+        SELECT * FROM agents 
+        WHERE id IN ('procurement-agent-01', 'maint-planner-01', 'cyber-monitor-01', 'records-agent-01')
+        ORDER BY 
+          CASE id
+            WHEN 'procurement-agent-01' THEN 1
+            WHEN 'maint-planner-01' THEN 2
+            WHEN 'cyber-monitor-01' THEN 3
+            WHEN 'records-agent-01' THEN 4
+            ELSE 5
+          END ASC
+      `).all();
+    } else {
+      rows = db.prepare('SELECT * FROM agents ORDER BY created_at DESC').all();
+    }
+
+    const telemetryMap = await getHostSiteTelemetry();
+
+    const agents = rows.map((r: any) => {
+      const isHostAgent = HOST_SITE_AGENT_IDS.includes(r.id);
+      const tel = telemetryMap[r.id] || null;
+
+      let allowedOps: string[] = [];
+      try { allowedOps = JSON.parse(r.allowed_operations); } catch { allowedOps = []; }
+
+      let allowedRes: string[] = [];
+      try { allowedRes = JSON.parse(r.allowed_resources); } catch { allowedRes = []; }
+
+      let workflowCfg: any = [];
+      try { workflowCfg = JSON.parse(r.workflow_config); } catch { workflowCfg = []; }
+
+      let inputReqs: any = {};
+      try { inputReqs = r.input_requirements ? JSON.parse(r.input_requirements) : {}; } catch { inputReqs = {}; }
+
+      let uncRule: any = {};
+      try { uncRule = r.uncertainty_rule ? JSON.parse(r.uncertainty_rule) : {}; } catch { uncRule = {}; }
+
+      return {
+        ...r,
+        status: tel?.hostStatus ? tel.hostStatus.toLowerCase() : r.status,
+        allowed_operations: allowedOps,
+        allowed_resources: allowedRes,
+        workflow_config: workflowCfg,
+        input_requirements: inputReqs,
+        uncertainty_rule: uncRule,
+        is_host_fleet: isHostAgent,
+        telemetry: tel
+      };
+    });
+
     res.json(agents);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -28,20 +164,43 @@ agentsRouter.get('/', (req: Request, res: Response) => {
 });
 
 // GET /api/agents/:id
-agentsRouter.get('/:id', (req: Request, res: Response) => {
+agentsRouter.get('/:id', async (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const row = db.prepare('SELECT * FROM agents WHERE id = ?').get(req.params.id) as any;
     if (!row) {
       return res.status(404).json({ error: 'Agent not found' });
     }
+
+    const isHostAgent = HOST_SITE_AGENT_IDS.includes(row.id);
+    const telemetryMap = await getHostSiteTelemetry();
+    const tel = telemetryMap[row.id] || null;
+
+    let allowedOps: string[] = [];
+    try { allowedOps = JSON.parse(row.allowed_operations); } catch { allowedOps = []; }
+
+    let allowedRes: string[] = [];
+    try { allowedRes = JSON.parse(row.allowed_resources); } catch { allowedRes = []; }
+
+    let workflowCfg: any = [];
+    try { workflowCfg = JSON.parse(row.workflow_config); } catch { workflowCfg = []; }
+
+    let inputReqs: any = {};
+    try { inputReqs = row.input_requirements ? JSON.parse(row.input_requirements) : {}; } catch { inputReqs = {}; }
+
+    let uncRule: any = {};
+    try { uncRule = row.uncertainty_rule ? JSON.parse(row.uncertainty_rule) : {}; } catch { uncRule = {}; }
+
     res.json({
       ...row,
-      allowed_operations: JSON.parse(row.allowed_operations),
-      allowed_resources: JSON.parse(row.allowed_resources),
-      workflow_config: JSON.parse(row.workflow_config),
-      input_requirements: row.input_requirements ? JSON.parse(row.input_requirements) : {},
-      uncertainty_rule: row.uncertainty_rule ? JSON.parse(row.uncertainty_rule) : {}
+      status: tel?.hostStatus ? tel.hostStatus.toLowerCase() : row.status,
+      allowed_operations: allowedOps,
+      allowed_resources: allowedRes,
+      workflow_config: workflowCfg,
+      input_requirements: inputReqs,
+      uncertainty_rule: uncRule,
+      is_host_fleet: isHostAgent,
+      telemetry: tel
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

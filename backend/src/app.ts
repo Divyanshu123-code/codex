@@ -16,16 +16,25 @@ import { demoRouter } from './routes/demo.js';
 import { debugRouter } from './routes/debug.js';
 import { liveAgentRouter } from './routes/liveAgent.js';
 import { authRouter } from './routes/auth.js';
+import { governanceRouter, controlRouter, governanceAuthMiddleware } from './routes/governance.js';
+import { integrationRouter } from './routes/integration.js';
 import { requireAuth } from './auth/middleware.js';
 
 export function createApp(): Express {
   const app = express();
 
   // P6: Restrict CORS to frontend origin from env variable
-  const allowedOrigin = process.env.FRONTEND_URL || process.env.CORS_ORIGIN || 'http://localhost:5173';
+  const allowedOrigins = new Set([
+    process.env.FRONTEND_URL || 'http://localhost:5173',
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'http://localhost:4100'
+  ]);
+  if (process.env.CORS_ORIGIN) allowedOrigins.add(process.env.CORS_ORIGIN);
+
   app.use(cors({
     origin: (origin, callback) => {
-      if (!origin || origin === allowedOrigin || process.env.NODE_ENV === 'test') {
+      if (!origin || allowedOrigins.has(origin) || process.env.NODE_ENV === 'test') {
         callback(null, true);
       } else {
         callback(new Error(`CORS blocked for origin: ${origin}`));
@@ -36,9 +45,19 @@ export function createApp(): Express {
 
   app.use(express.json());
 
+  // Request timing logs
+  app.use((req: Request, res: Response, next) => {
+    const start = Date.now();
+    res.on('finish', () => {
+      const durationMs = Date.now() - start;
+      console.log(`[HTTP ${req.method} ${req.originalUrl}] ${res.statusCode} in ${durationMs}ms`);
+    });
+    next();
+  });
+
   // Public Endpoints
   // 1. Health check endpoint (Phase 1 deliverable, public)
-  app.get('/api/health', (req: Request, res: Response) => {
+  const healthCheckHandler = (req: Request, res: Response) => {
     try {
       const db = getDatabase();
       const userCountRow = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
@@ -66,10 +85,18 @@ export function createApp(): Express {
         message: error.message
       });
     }
-  });
+  };
+
+  app.get('/api/health', healthCheckHandler);
+  app.get('/health', healthCheckHandler);
 
   // 2. Auth router (login, me, demo-users)
   app.use('/api/auth', authRouter);
+
+  // 3. Host-site & Agent Governance Integration Routes (API Key Authenticated)
+  app.use('/api/governance', governanceAuthMiddleware, governanceRouter);
+  app.use('/api/control', governanceAuthMiddleware, controlRouter);
+  app.use('/api/integration', integrationRouter);
 
   // Authenticated Endpoints (P6: requireAuth middleware protects all operational surfaces)
   app.use('/api', requireAuth);
@@ -93,6 +120,24 @@ export function createApp(): Express {
   app.use('/api/demo', demoRouter);
   app.use('/api/debug', debugRouter);
   app.use('/api/live-agent', liveAgentRouter);
+
+  // Database busy/locked error logger & general error handler
+  app.use((err: any, req: Request, res: Response, next: any) => {
+    if (err) {
+      const msg = err.message || String(err);
+      const code = err.code || '';
+      if (
+        msg.toLowerCase().includes('busy') ||
+        msg.toLowerCase().includes('locked') ||
+        code.includes('BUSY') ||
+        code.includes('LOCKED')
+      ) {
+        console.error(`[DATABASE BUSY/LOCKED ERROR] on ${req.method} ${req.originalUrl}: ${msg}`);
+      }
+    }
+    if (res.headersSent) return next(err);
+    res.status(err.status || 500).json({ error: err.code || 'INTERNAL_ERROR', message: err.message });
+  });
 
   return app;
 }

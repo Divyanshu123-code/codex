@@ -121,7 +121,7 @@ actionsRouter.post('/explain/:id', async (req: Request, res: Response) => {
     
     // Fallback: If not found in action_requests directly, lookup via approvals table
     if (!reqRow) {
-      const apprRow = db.prepare('SELECT * FROM approvals WHERE id = ? OR request_id = ?').get(req.params.id, req.params.id) as any;
+      const apprRow = db.prepare('SELECT * FROM approvals WHERE id = ? OR request_id = ? ORDER BY requested_at DESC LIMIT 1').get(req.params.id, req.params.id) as any;
       if (apprRow) {
         reqRow = db.prepare('SELECT * FROM action_requests WHERE id = ?').get(apprRow.request_id) as any;
         if (!reqRow) {

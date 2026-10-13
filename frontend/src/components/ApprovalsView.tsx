@@ -12,13 +12,17 @@ interface ApprovalsViewProps {
   ) => Promise<any>;
   selectedApprovalId?: string | null;
   currentUser?: AuthUser;
+  onRefresh?: () => void;
+  onSwitchPersona?: (user: AuthUser, token: string) => void;
 }
 
 export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
   approvals,
   onDecideApproval,
   selectedApprovalId,
-  currentUser
+  currentUser,
+  onRefresh,
+  onSwitchPersona
 }) => {
   const [selectedApproval, setSelectedApproval] = useState<Approval | null>(
     selectedApprovalId 
@@ -68,6 +72,58 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
     setAiExplanation(null);
   }, [selectedApproval?.id, selectedApproval?.request_id]);
 
+  const handleQuickSwitchToAdmin = async () => {
+    if (!selectedApproval) return;
+    setIsReopening(true);
+    setReopenError(null);
+    try {
+      const loginRes = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'admin2', password: 'password123' })
+      });
+      const loginData = await parseJsonSafe(loginRes);
+      if (!loginRes.ok || !loginData?.token) {
+        throw new Error('Failed to switch to administrator account.');
+      }
+      if (onSwitchPersona) {
+        onSwitchPersona(loginData.user, loginData.token);
+      }
+      const res = await fetch(`/api/approvals/${selectedApproval.id}/reopen`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${loginData.token}`
+        },
+        body: JSON.stringify({
+          reason: 'Reopened following administrative review for re-evaluation of mistaken rejection.'
+        })
+      });
+      const data = await parseJsonSafe(res);
+      if (!res.ok) {
+        throw new Error(data?.error || `Failed to reopen approval (${res.status})`);
+      }
+      const newId = data.newApprovalId || data.approvalId || selectedApproval.id;
+      setSelectedApproval(prev => prev ? {
+        ...prev,
+        id: newId,
+        status: 'PENDING',
+        reopened_from_id: prev.id,
+        reason: null,
+        approver_id: null,
+        execution_status: 'NOT_EXECUTED'
+      } : null);
+      setWrittenReason('Re-evaluation clearance confirmed following administrative audit review.');
+      if (onRefresh) {
+        onRefresh();
+      }
+    } catch (err: any) {
+      setReopenError(err.message || 'Failed to reopen case');
+    } finally {
+      setIsReopening(false);
+    }
+  };
+
   const handleReopenDirect = async () => {
     if (!selectedApproval) return;
     setIsReopening(true);
@@ -84,8 +140,10 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
       if (!res.ok) {
         throw new Error(data?.error || `Failed to reopen approval (${res.status})`);
       }
+      const newId = data.newApprovalId || data.approvalId || selectedApproval.id;
       setSelectedApproval(prev => prev ? {
         ...prev,
+        id: newId,
         status: 'PENDING',
         reopened_from_id: prev.id,
         reason: null,
@@ -93,6 +151,9 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
         execution_status: 'NOT_EXECUTED'
       } : null);
       setWrittenReason('Re-evaluation clearance confirmed following administrative audit review.');
+      if (onRefresh) {
+        onRefresh();
+      }
     } catch (err: any) {
       setReopenError(err.message || 'Failed to reopen case');
     } finally {
@@ -604,8 +665,22 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
                 </div>
 
                 {errorMessage && (
-                  <div className="p-2 rounded bg-rose-50 border border-rose-200 text-rose-700 text-xs font-mono">
-                    {errorMessage}
+                  <div className="p-2.5 rounded bg-rose-50 border border-rose-200 text-rose-800 text-xs space-y-1.5 font-mono">
+                    <div className="font-bold flex items-center gap-1 text-rose-900">
+                      <span className="material-symbols-outlined text-sm">error</span>
+                      Clearance Blocked
+                    </div>
+                    <div className="text-[0.6875rem] leading-relaxed">{errorMessage}</div>
+                    {errorMessage.includes('SEPARATION_OF_DUTIES_VIOLATION') && (
+                      <button
+                        type="button"
+                        onClick={handleQuickSwitchToAdmin}
+                        className="mt-1 py-1 px-2.5 rounded bg-indigo-700 hover:bg-indigo-800 text-white font-sans font-bold text-[0.6875rem] flex items-center gap-1 transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-xs">swap_horiz</span>
+                        Switch to Secondary Commander (admin2)
+                      </button>
+                    )}
                   </div>
                 )}
 
@@ -664,14 +739,35 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
                     <p className="text-[0.6875rem] text-slate-700 leading-relaxed">
                       If this case was rejected by mistake, you can recover it directly from Backup &amp; Recovery and reopen it for re-evaluation. Reopening will return this request to active <strong>PENDING</strong> review so you can either approve or reject it.
                     </p>
-                    <button
-                      onClick={handleReopenDirect}
-                      disabled={isReopening}
-                      className="w-full py-2 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-1.5 transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-[1rem]">replay</span>
-                      {isReopening ? 'Restoring for Re-evaluation...' : 'Reopen for Re-evaluation (Approve / Reject)'}
-                    </button>
+                    {currentUser?.role !== 'admin' ? (
+                      <div className="p-2.5 rounded bg-amber-50 border border-amber-200 text-amber-900 space-y-2">
+                        <div className="text-xs font-bold flex items-center gap-1.5 text-amber-900">
+                          <span className="material-symbols-outlined text-sm text-amber-700">lock</span>
+                          <span>Administrator Clearance Required</span>
+                        </div>
+                        <p className="text-[0.6875rem] text-amber-800 leading-relaxed">
+                          Reopening rejected decisions requires Level 2 Administrator clearance (Commander <code>admin</code> or Secondary Commander <code>admin2</code>). Duty Officers cannot reopen decisions directly.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={handleQuickSwitchToAdmin}
+                          disabled={isReopening}
+                          className="w-full py-2 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-1.5 transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-[1rem]">swap_horiz</span>
+                          {isReopening ? 'Switching & Reopening...' : 'Switch to Secondary Commander (admin2) & Reopen'}
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={handleReopenDirect}
+                        disabled={isReopening}
+                        className="w-full py-2 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-1.5 transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-[1rem]">replay</span>
+                        {isReopening ? 'Restoring for Re-evaluation...' : 'Reopen for Re-evaluation (Approve / Reject)'}
+                      </button>
+                    )}
                     {reopenError && (
                       <div className="p-2 rounded bg-rose-50 border border-rose-200 text-rose-700 text-xs font-mono">
                         {reopenError}

@@ -285,6 +285,8 @@ export function App() {
               onPauseAgent={handlePauseAgent}
               onResumeAgent={handleResumeAgent}
               selectedAgentId={selectedAgentId}
+              onNavigateTab={setActiveTab}
+              onSelectApproval={handleSelectApproval}
             />
           )}
 
@@ -300,6 +302,8 @@ export function App() {
               onDecideApproval={handleDecideApproval}
               selectedApprovalId={selectedApprovalId}
               currentUser={currentUser}
+              onRefresh={refreshData}
+              onSwitchPersona={handleSwitchPersona}
             />
           )}
 

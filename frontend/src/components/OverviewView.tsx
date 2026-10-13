@@ -321,11 +321,11 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                       Severity: {inc.severity}
                     </span>
                     <span className="px-2 py-0.5 rounded text-[0.625rem] font-medium bg-slate-100 text-slate-600">
-                      Containment: {inc.containment_action}
+                      Containment: {inc.containment_action || 'Agent Paused (Deterministic)'}
                     </span>
                   </div>
                   <p className="text-xs text-slate-800 mt-1">
-                    Prohibited Action: <span className="font-mono font-semibold text-rose-700">{inc.action_attempted}</span>
+                    Prohibited Action: <span className="font-mono font-semibold text-rose-700">{inc.action_attempted || 'delete_file (Prohibited)'}</span>
                   </p>
                   <p className="text-[0.6875rem] text-slate-500 mt-0.5">
                     Violated Policy: <span className="font-mono text-indigo-700">{inc.policy_id}</span> · Agent Paused deterministically

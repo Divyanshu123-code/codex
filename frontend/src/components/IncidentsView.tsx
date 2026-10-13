@@ -325,23 +325,48 @@ export const IncidentsView: React.FC<IncidentsViewProps> = ({
                 </button>
               </div>
 
+              {/* Triage Error Alert */}
+              {triageError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-800 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[1rem] text-rose-600">error</span>
+                  <span>{triageError}</span>
+                </div>
+              )}
+
               {/* Diagnostic Signature Triage Panel */}
               {triageData && (
-                <div className="p-3.5 bg-indigo-50/60 border border-indigo-200 rounded-lg space-y-2 text-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-xs font-bold text-indigo-900">
-                      Closed Signature Triage Result
+                <div className="p-4 bg-indigo-50/80 border border-indigo-200 rounded-lg space-y-3 text-xs">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs font-bold text-indigo-950 flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-[1rem] text-indigo-600">troubleshoot</span>
+                        Closed Diagnostic Signature Match
+                      </span>
+                      <span className="px-1.5 py-0.5 rounded text-[0.625rem] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 font-mono">
+                        DETERMINISTIC (&lt;1ms)
+                      </span>
+                    </div>
+                    <span className="font-mono text-xs px-2.5 py-0.5 rounded bg-indigo-200 text-indigo-950 font-bold border border-indigo-300">
+                      {triageData.signature_id || triageData.signatureId || 'SIG-DISALLOWED-OP'}
                     </span>
-                    <span className="font-mono text-[0.6875rem] px-2 py-0.5 rounded bg-indigo-200/80 text-indigo-900 font-bold">
-                      {triageData.signature_id || 'SIG-CYBER-CONTAINMENT-01'}
-                    </span>
                   </div>
-                  <div className="text-[0.6875rem] text-slate-700">
-                    <strong className="text-slate-900">Root Cause:</strong> {triageData.root_cause || 'Autonomous agent exceeded configured operations catalog perimeter.'}
+
+                  <div className="text-[0.6875rem] text-slate-700 bg-white p-2.5 rounded-md border border-indigo-100">
+                    <strong className="text-slate-900 block mb-0.5">Root Cause Diagnosis:</strong>
+                    {triageData.root_cause || triageData.explanation || triageData.causeCategory || 'Autonomous agent exceeded configured operations catalog perimeter.'}
                   </div>
-                  <div className="text-[0.6875rem] text-slate-700">
-                    <strong className="text-slate-900">Remediation:</strong> {triageData.recommended_action || 'Submit patch confining execution scope and verify in sandbox.'}
+
+                  <div className="text-[0.6875rem] text-slate-700 bg-white p-2.5 rounded-md border border-indigo-100">
+                    <strong className="text-slate-900 block mb-0.5">Remediation Action:</strong>
+                    {triageData.recommended_action || (typeof triageData.proposedCorrection === 'object' ? triageData.proposedCorrection?.description : triageData.proposedCorrection) || 'Submit patch confining execution scope and verify in sandbox.'}
                   </div>
+
+                  {triageData.proposedCorrection && (
+                    <div className="text-[0.625rem] font-mono text-indigo-950 bg-indigo-100/70 p-2.5 rounded-md border border-indigo-200 overflow-x-auto">
+                      <strong className="font-sans font-bold text-indigo-950 block mb-1">Synthesized Correction Template:</strong>
+                      <pre className="whitespace-pre-wrap font-mono">{typeof triageData.proposedCorrection === 'object' ? JSON.stringify(triageData.proposedCorrection, null, 2) : String(triageData.proposedCorrection)}</pre>
+                    </div>
+                  )}
                 </div>
               )}
 

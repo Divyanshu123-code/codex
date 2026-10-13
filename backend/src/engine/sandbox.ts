@@ -247,7 +247,7 @@ export function testCorrection(
     let b4Op = 'read_file';
     let b4Res = 'synthetic://documents/sample_brief.txt';
 
-    if (agentRow.id === 'doc-agent-01') {
+    if (agentRow.id === 'doc-agent-01' || agentRow.id === 'data-exporter-99') {
       b4Op = 'read_file';
       b4Res = 'synthetic://documents/sample_brief.txt';
     } else if (agentRow.id === 'agent-pred-maint-01') {

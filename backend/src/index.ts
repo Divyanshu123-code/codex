@@ -20,6 +20,17 @@ if (userCount === 0) {
 
 const app = createApp();
 
-app.listen(port, () => {
-  console.log(`🛡️  AI Governance Control Plane backend listening on port ${port}`);
+const server = app.listen(Number(port), '127.0.0.1', () => {
+  console.log(`🛡️  AI Governance Control Plane backend listening on http://127.0.0.1:${port}`);
 });
+
+server.on('error', (err: any) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`❌ FATAL: Port ${port} is already in use (EADDRINUSE). Another AegisOS server process is already running on 127.0.0.1:${port}. Terminating immediately.`);
+    process.exit(1);
+  } else {
+    console.error('❌ Server startup error:', err);
+    process.exit(1);
+  }
+});
+

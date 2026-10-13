@@ -228,15 +228,39 @@ backupsRouter.post('/:id/reopen', requireAdmin, (req: Request, res: Response) =>
       });
     }
 
+    const reqRow = db.prepare('SELECT resource, tool, parameters FROM action_requests WHERE id = ?').get(backup.request_id) as any;
     const paramsSnapshot = JSON.parse(backup.parameters_snapshot || '{}');
+
+    let targetResource = reqRow?.resource || paramsSnapshot.resource;
+    if (!targetResource) {
+      if (paramsSnapshot.order_id || backup.operation === 'issue_refund') {
+        targetResource = 'synthetic://orders/' + (paramsSnapshot.order_id || 'default');
+      } else if (paramsSnapshot.equipment_id) {
+        targetResource = 'synthetic://telemetry/' + paramsSnapshot.equipment_id;
+      } else {
+        const matchedPattern = agent.allowed_resources.find((pat: string) => !pat.includes('orders')) || agent.allowed_resources[0];
+        targetResource = matchedPattern ? matchedPattern.replace(/\*$/, 'default') : 'synthetic://orders/default';
+      }
+    }
+
+    const targetTool = reqRow?.tool || 'protected_tool';
+    let targetParams = paramsSnapshot;
+    if (reqRow?.parameters) {
+      try {
+        targetParams = typeof reqRow.parameters === 'string' ? JSON.parse(reqRow.parameters) : reqRow.parameters;
+      } catch {
+        targetParams = paramsSnapshot;
+      }
+    }
+
     const reval = evaluatePolicy(
       agent,
       {
         agent_id: backup.agent_id,
-        tool: 'protected_tool',
+        tool: targetTool,
         operation: backup.operation,
-        resource: 'synthetic://orders/' + (paramsSnapshot.order_id || 'default'),
-        parameters: paramsSnapshot
+        resource: targetResource,
+        parameters: targetParams
       },
       policies,
       catalog

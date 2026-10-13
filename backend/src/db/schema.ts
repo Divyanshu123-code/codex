@@ -284,6 +284,28 @@ export function initializeSchema(db: DatabaseSync): void {
       completed_at INTEGER
     );
 
+    -- Single-use governance authorization tokens for host runtime execution
+    CREATE TABLE IF NOT EXISTS governance_tokens (
+      request_id TEXT PRIMARY KEY,
+      token TEXT NOT NULL,
+      nonce TEXT NOT NULL,
+      expires_at INTEGER NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+
+    -- Ed25519 single-use integration tokens
+    CREATE TABLE IF NOT EXISTS integration_tokens (
+      request_id TEXT PRIMARY KEY,
+      agent_id TEXT NOT NULL,
+      token TEXT NOT NULL,
+      nonce TEXT UNIQUE NOT NULL,
+      params_hash TEXT NOT NULL,
+      expires_at INTEGER NOT NULL,
+      is_used INTEGER NOT NULL DEFAULT 0,
+      used_at INTEGER,
+      created_at INTEGER NOT NULL
+    );
+
     -- Indexes for performance & quick timeline querying
     CREATE INDEX IF NOT EXISTS idx_audit_agent ON audit_events(agent_id);
     CREATE INDEX IF NOT EXISTS idx_audit_request ON audit_events(request_id);
@@ -300,6 +322,13 @@ export function initializeSchema(db: DatabaseSync): void {
 
   // Safe incremental migration for existing databases on disk
   const migrations = [
+    `CREATE TABLE IF NOT EXISTS governance_tokens (
+      request_id TEXT PRIMARY KEY,
+      token TEXT NOT NULL,
+      nonce TEXT NOT NULL,
+      expires_at INTEGER NOT NULL,
+      created_at INTEGER NOT NULL
+    )`,
     `ALTER TABLE agents ADD COLUMN agent_category TEXT NOT NULL DEFAULT 'document_analysis'`,
     `ALTER TABLE agents ADD COLUMN owner_team TEXT`,
     `ALTER TABLE agents ADD COLUMN risk_level TEXT`,
